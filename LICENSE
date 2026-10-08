@@ -1,0 +1,124 @@
+LAUNCHLAB — PROPRIETARY SOFTWARE LICENCE AND TERMS OF USE
+
+Copyright © 2026 Philip Leichauer. All rights reserved.
+Version 1.0 — 8 October 2026
+
+1. SCOPE AND OWNERSHIP
+
+   These terms apply to the original LaunchLab software, source code,
+   documentation, interface and artwork supplied by Philip Leichauer
+   ("the Software"), to the extent that he owns or can license those rights.
+   The Software is licensed, not sold. Ownership is not transferred.
+
+   Third-party components are excluded from these proprietary restrictions
+   and remain subject to their own licences. See THIRD_PARTY_NOTICES.txt
+   and the notices supplied with those components. This licence does not
+   claim exclusive rights in public-domain material, scientific facts,
+   mathematical ideas or rights belonging to other people.
+
+2. PERMITTED USE
+
+   Subject to these terms, you may use LaunchLab through a hosted service
+   authorised by Philip Leichauer, including for personal learning and
+   teaching. This permission is non-exclusive, non-transferable and does
+   not permit sublicensing or operating your own copy of the service.
+
+   You may make the temporary and cached copies your browser normally
+   needs to access that service. You may share links to the authorised
+   service. No fee is charged under this licence for that permitted use.
+
+   Access to source files, build instructions or a portable build does not
+   itself grant permission to download a copy for offline use, modify,
+   redistribute or self-host the Software. Those activities require a
+   separate written permission from Philip Leichauer, except where
+   section 4 or a third-party licence permits them.
+
+3. RESTRICTIONS
+
+   Except as expressly permitted above, by separate written permission,
+   or under section 4, you must not:
+
+   - copy, publish, distribute, sell, sublicense or mirror the Software
+     or a substantial part of its protected code or other materials;
+   - modify or translate the Software or create derivative works of it;
+   - extract its protected code or assets for reuse in another project;
+   - decompile, disassemble or reverse engineer the Software;
+   - remove or obscure copyright, attribution or proprietary notices;
+   - represent the Software as your own work or imply endorsement by
+     Philip Leichauer without permission; or
+   - bypass access controls or deliberately disrupt the hosted service.
+
+   All rights in the Software not expressly granted are reserved.
+
+4. RIGHTS THAT THESE TERMS DO NOT RESTRICT
+
+   Nothing in these terms restricts any use allowed by applicable law
+   that cannot lawfully be excluded by agreement. This includes, where
+   the legal conditions are met, necessary backup copies, decompilation
+   for interoperability, and observing, studying or testing a program
+   during lawful use under the Copyright, Designs and Patents Act 1988.
+   Other applicable statutory exceptions and consumer rights also remain.
+
+   These terms do not revoke or replace permissions validly granted for
+   earlier copies under the MIT licence or another licence. Those copies
+   remain governed by their applicable licence. Third-party licence
+   permissions are also unaffected.
+
+5. AVAILABILITY AND ENDING USE
+
+   You may stop using the Software at any time. Philip Leichauer may
+   update or withdraw the free hosted service. Reasonable advance notice
+   of a planned withdrawal will be given through the service where
+   practicable. Access may be suspended immediately where reasonably
+   necessary to address abuse, security problems or legal obligations.
+
+   Permission under this licence may be terminated for a material breach
+   of these terms. Where the breach can be remedied, reasonable notice and
+   an opportunity to remedy it will be given. On termination you must stop
+   using the Software under this licence and remove copies held solely
+   under it, except copies you are entitled or required by law to retain.
+   Termination does not remove rights preserved by section 4.
+
+6. PURPOSE, WARRANTIES AND LIABILITY
+
+   LaunchLab is an educational simulation with simplified models. Its
+   results are not a substitute for professional engineering analysis,
+   and it is not supplied for safety-critical or operational decisions.
+
+   Subject to your statutory rights, the Software is provided "as is" and
+   "as available". No promise is made that it will be uninterrupted,
+   error-free or suitable for a particular purpose.
+
+   Nothing in these terms excludes or limits liability for death or
+   personal injury caused by negligence, fraud or fraudulent
+   misrepresentation, or any other liability that cannot lawfully be
+   excluded or limited. Your statutory consumer rights are unaffected.
+
+   Subject to those protections, Philip Leichauer is not responsible for
+   losses that were not reasonably foreseeable as a result of a breach of
+   these terms. If you use the Software for business purposes, liability
+   for loss of profit, business, anticipated savings or business
+   opportunity is excluded to the extent permitted by law.
+
+7. GOVERNING LAW
+
+   These terms are governed by the law of England and Wales. The courts
+   of England and Wales have jurisdiction. If you are a consumer, this
+   does not deprive you of mandatory protections or rights to bring
+   proceedings in the courts of your place of residence under applicable
+   law. For non-consumer disputes, jurisdiction is exclusive to the courts
+   of England and Wales.
+
+8. OTHER PERMISSIONS
+
+   Permission for uses outside this licence must be obtained in writing
+   from Philip Leichauer before that use begins. A separate written
+   licence may grant different rights for a specified copy or use.
+
+   Subject to sections 4 and 6 and any separate written licence, these
+   terms are the entire agreement between you and Philip Leichauer for
+   this version of the authorised service and supersede earlier informal
+   oral discussions about it.
+
+   If a provision is unenforceable, the remaining provisions continue
+   to apply to the extent permitted by law.

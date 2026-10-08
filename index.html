@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5efdf">
+<meta name="description" content="A playful physics field lab. Launch, watch, change one thing, and discover what happens.">
+<title>Launch Lab · A little curiosity goes a long way</title>
+</head>
+<body>
+<a class="skip-link" href="#scene">Skip to flight controls</a>
+<div id="tooltip" role="tooltip">
+</div>
+<main class="app-container">
+  <aside class="control-panel" aria-label="Experiment setup">
+    <header class="lab-brand">
+<span class="brand-mark" aria-hidden="true">↗</span>
+<div>
+<h1 class="panel-title">Launch Lab<span class="brand-dot">.</span>
+</h1>
+<p class="panel-subtitle">A little curiosity goes a long way.</p>
+</div>
+<span class="edition-mark" aria-hidden="true">FIELD<br>NO. 01</span>
+</header>
+    <div class="mode-toggle" id="mode-toggle" role="group" aria-label="Launcher">
+<button type="button" class="mode-btn active" data-mode="cannon" aria-pressed="true">
+<span aria-hidden="true">↗</span> Cannon</button>
+<button type="button" class="mode-btn" data-mode="rocket" aria-pressed="false">
+<span aria-hidden="true">↑</span> Rocket</button>
+</div>
+    <div class="controls-scroll">
+      <section class="world-section" aria-label="Environment">
+<div class="section-heading">
+<h2 class="section-header">Choose a world</h2>
+<span class="world-caption" id="environment-label">Earth · 9.81 m/s²</span>
+</div>
+<div class="planet-grid">
+<button type="button" class="planet-btn" data-planet="sun" data-gravity="274" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Sun</span>
+</button>
+<button type="button" class="planet-btn" data-planet="mercury" data-gravity="3.7" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Mercury</span>
+</button>
+<button type="button" class="planet-btn" data-planet="venus" data-gravity="8.87" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Venus</span>
+</button>
+<button type="button" class="planet-btn active" data-planet="earth" data-gravity="9.81" aria-pressed="true">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Earth</span>
+</button>
+<button type="button" class="planet-btn" data-planet="moon" data-gravity="1.62" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Moon</span>
+</button>
+<button type="button" class="planet-btn" data-planet="mars" data-gravity="3.72" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Mars</span>
+</button>
+<button type="button" class="planet-btn" data-planet="jupiter" data-gravity="25.92" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Jupiter</span>
+</button>
+<button type="button" class="planet-btn" data-planet="ganymede" data-gravity="1.428" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Ganymede</span>
+</button>
+<button type="button" class="planet-btn" data-planet="saturn" data-gravity="11.19" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Saturn</span>
+</button>
+<button type="button" class="planet-btn" data-planet="uranus" data-gravity="9.01" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Uranus</span>
+</button>
+<button type="button" class="planet-btn" data-planet="neptune" data-gravity="11.27" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Neptune</span>
+</button>
+<button type="button" class="planet-btn" data-planet="pluto" data-gravity="0.62" aria-pressed="false">
+<span class="planet-icon" aria-hidden="true">
+</span>
+<span>Pluto</span>
+</button>
+</div>
+<button type="button" class="planet-fact-button" id="planet-fact-button" aria-haspopup="dialog" aria-controls="planet-fact-dialog">
+<span id="planet-fact-button-label">Earth facts</span><span aria-hidden="true">↗</span>
+</button>
+</section>
+    <div class="launch-actions" aria-label="Launch actions">
+<div id="cannon-actions" class="action-row">
+<button type="button" class="btn-fire" id="btn-fire">Let it fly <span aria-hidden="true">↗</span>
+</button>
+<button type="button" class="btn-clear" id="btn-clear" title="Reset flight; keep your settings">Reset</button>
+</div>
+<div id="rocket-actions" class="action-row" hidden>
+<button type="button" class="btn-fire btn-launch" id="btn-launch">Lift off <span aria-hidden="true">↑</span>
+</button>
+<button type="button" class="btn-clear" id="btn-rocket-clear" title="Reset flight; keep your settings">Reset</button>
+</div>
+<p id="flight-lock-note" class="field-note" hidden>Flight in progress. Pause to inspect, or reset to change the setup.</p>
+</div>
+      <section class="cannon-panel" id="cannon-panel" aria-label="Cannon settings">
+<h2 class="section-header">Set your shot</h2>
+<button type="button" class="settings-reset" id="btn-cannon-settings-reset">Reset cannon settings <span aria-hidden="true">↺</span></button>
+<p class="settings-reset-note">Restore the starting shot on your chosen world.</p>
+<div class="slider-group">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-angle">Launch angle</label>
+<button type="button" class="tooltip-trigger" aria-label="About Launch angle" data-tip="&lt;b&gt;Which angle goes farther?&lt;/b&gt;&lt;br&gt;Low angles give flatter paths; high angles give taller arcs. A 45° optimum and equal ranges for complementary angles assume uniform gravity and equal launch and landing heights. Our elevated muzzle and curved planets can change those results.">?</button>
+</span>
+<output class="slider-value" id="val-angle" for="slider-angle">45°</output>
+</div>
+<input type="range" id="slider-angle" min="5" max="85" value="45" step="1" aria-label="Launch angle">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-force">Launch force</label>
+<button type="button" class="tooltip-trigger" aria-label="About Launch force" data-tip="&lt;b&gt;A bigger push&lt;/b&gt;&lt;br&gt;In this ideal launcher, force × barrel length becomes the ball’s kinetic energy. Double the force and the launch speed increases by √2.">?</button>
+</span>
+<output class="slider-value" id="val-force" for="slider-force">500 N</output>
+</div>
+<input type="range" id="slider-force" min="50" max="5000" value="500" step="10" aria-label="Launch force">
+</div>
+</div>
+
+<details class="lab-details" open>
+<summary>Flight measurements</summary>
+<div class="details-content">
+<div class="readout-grid" id="flight-data">
+<span class="readout-label">Speed</span>
+<span class="readout-value " id="read-velocity">—</span>
+<span class="readout-label">Height</span>
+<span class="readout-value " id="read-height">—</span>
+<span class="readout-label">Surface position <button type="button" class="tooltip-trigger" aria-label="About surface position" data-tip="Position along the surface, measured from the scene's fixed origin. The cannon muzzle starts a little beyond zero.">?</button></span>
+<span class="readout-value " id="read-distance">—</span>
+</div>
+<div class="readout-grid energy-readouts">
+<span class="readout-label">Motion energy</span>
+<span class="readout-value ke" id="read-ke">—</span>
+<span class="readout-label">Height energy</span>
+<span class="readout-value pe" id="read-pe">—</span>
+<span class="readout-label">Total energy</span>
+<span class="readout-value tme" id="read-tme">—</span>
+</div>
+<div class="energy-bar-container" id="energy-bar" role="img" aria-label="Motion and gravitational potential energy">
+<div class="energy-bar-segment energy-bar-ke" id="energy-bar-ke">
+</div>
+<div class="energy-bar-segment energy-bar-pe" id="energy-bar-pe">
+</div>
+</div>
+<div class="energy-bar-legend">
+<span>
+<span class="legend-dot ke">
+</span>Motion</span>
+<span>
+<span class="legend-dot pe">
+</span>Height</span>
+</div>
+</div>
+</details>
+<details class="lab-details">
+<summary>Ball & barrel</summary>
+<div class="details-content">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-mass">Ball mass</label>
+<button type="button" class="tooltip-trigger" aria-label="About Ball mass" data-tip="&lt;b&gt;Same push, different ball&lt;/b&gt;&lt;br&gt;The same launch work gives a heavier ball less speed: v = √(2Fd/m). Once in flight, gravitational acceleration is independent of the ball’s mass.">?</button>
+</span>
+<output class="slider-value" id="val-mass" for="slider-mass">5 kg</output>
+</div>
+<input type="range" id="slider-mass" min="0.5" max="20" value="5" step="0.1" aria-label="Ball mass">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-barrel">Barrel length</label>
+<button type="button" class="tooltip-trigger" aria-label="About Barrel length" data-tip="&lt;b&gt;Room for a longer push&lt;/b&gt;&lt;br&gt;Work = force × barrel length. In this model a longer barrel delivers more launch energy. The muzzle position also changes.">?</button>
+</span>
+<output class="slider-value" id="val-barrel" for="slider-barrel">2 m</output>
+</div>
+<input type="range" id="slider-barrel" min="0.5" max="5" value="2" step="0.1" aria-label="Barrel length">
+</div>
+</div>
+</details>
+</section>
+      <section class="rocket-panel" id="rocket-panel" aria-label="Rocket settings" hidden>
+<button type="button" class="settings-reset" id="btn-rocket-settings-reset">Reset rocket settings <span aria-hidden="true">↺</span></button>
+<p class="settings-reset-note">Restore the starting rocket on your chosen world.</p>
+<div class="slider-group">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-propmass">Propellant load</label>
+<button type="button" class="tooltip-trigger" aria-label="About Propellant load" data-tip="&lt;b&gt;One more scoop?&lt;/b&gt;&lt;br&gt;More propellant lengthens the burn, but the engine has more mass to lift. Watch both the burn time and thrust-to-weight ratio.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-propmass" for="slider-rocket-propmass">8 kg</output>
+</div>
+<input type="range" id="slider-rocket-propmass" min="1" max="5000" value="8" step="1" aria-label="Propellant load">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-angle">Launch angle</label>
+<button type="button" class="tooltip-trigger" aria-label="About Launch angle" data-tip="&lt;b&gt;Up, then over&lt;/b&gt;&lt;br&gt;90° is vertical. An inclined launch needs enough upward thrust to lift the vehicle. The guidance setting controls its direction after launch.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-angle" for="slider-rocket-angle">85°</output>
+</div>
+<input type="range" id="slider-rocket-angle" min="5" max="90" value="85" step="1" aria-label="Launch angle">
+</div>
+</div>
+<p class="tw-warning tw-warning-hidden" id="tw-warning" role="status">Not enough upward thrust for immediate lift-off. Try less mass, more thrust, or a steeper launch.</p>
+<p class="fizzle-message fizzle-message-hidden" id="fizzle-message" role="status">
+</p>
+
+<details class="lab-details" open>
+<summary>Flight measurements</summary>
+<div class="details-content">
+<div class="readout-grid" id="rocket-flight-data">
+<span class="readout-label">Speed</span>
+<span class="readout-value " id="read-rocket-velocity">—</span>
+<span class="readout-label">Altitude</span>
+<span class="readout-value " id="read-rocket-height">—</span>
+<span class="readout-label">Distance from pad</span>
+<span class="readout-value " id="read-rocket-range">—</span>
+<span class="readout-label">Thrust</span>
+<span class="readout-value " id="read-rocket-live-thrust">—</span>
+<span class="readout-label">Mass</span>
+<span class="readout-value " id="read-rocket-live-mass">—</span>
+<span class="readout-label">Propellant left</span>
+<span class="readout-value " id="read-rocket-prop">—</span>
+<span class="readout-label">Specific impulse</span>
+<span class="readout-value " id="read-rocket-live-isp">—</span>
+<span class="readout-label">Total thrust / local weight<button type="button" class="tooltip-trigger" aria-label="About live thrust / weight" data-tip="Current total thrust divided by local weight. Gravity becomes weaker with altitude.">?</button></span>
+<span class="readout-value " id="read-rocket-live-tw">—</span>
+<span class="readout-label">Total impulse</span>
+<span class="readout-value " id="read-rocket-impulse">—</span>
+</div>
+<p class="engine-state" id="read-rocket-engine" role="status">Tanks ready</p>
+<div class="prop-gauge-container" id="prop-gauge" role="progressbar" aria-label="Propellant remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+<div class="prop-gauge-segment prop-gauge-ox" id="prop-gauge-ox">
+</div>
+<div class="prop-gauge-segment prop-gauge-fuel" id="prop-gauge-fuel">
+</div>
+</div>
+<div class="prop-gauge-legend">
+<span>
+<span class="legend-dot prop-ox-dot">
+</span>Oxidizer</span>
+<span>
+<span class="legend-dot prop-fuel-dot">
+</span>Fuel</span>
+</div>
+</div>
+</details>
+<details class="lab-details">
+<summary>Engine estimates</summary>
+<div class="details-content">
+<div class="readout-grid" id="rocket-prelaunch">
+<span class="readout-label">Thrust</span>
+<span class="readout-value " id="read-rocket-thrust">—</span>
+<span class="readout-label">Total thrust / weight<button type="button" class="tooltip-trigger" aria-label="About total thrust / weight" data-tip="Total thrust ÷ surface weight. An inclined launch needs sufficient upward thrust, not just a total ratio above one; the launch warning checks that upward component.">?</button>
+</span>
+<span class="readout-value " id="read-rocket-tw">—</span>
+<span class="readout-label">Estimated burn</span>
+<span class="readout-value " id="read-rocket-burn">—</span>
+<span class="readout-label">Ideal Δv<button type="button" class="tooltip-trigger" aria-label="About Ideal Δv" data-tip="Exhaust speed × ln(full mass / empty mass), using initial engine conditions. This is an ideal full-tank budget; gravity, steering and changing pressure also affect the actual velocity.">?</button>
+</span>
+<span class="readout-value " id="read-rocket-dv">—</span>
+<span class="readout-label">Propellant flow</span>
+<span class="readout-value " id="read-rocket-mdot">—</span>
+<span class="readout-label">Specific impulse<button type="button" class="tooltip-trigger" aria-label="About Specific impulse" data-tip="Isp = effective exhaust speed ÷ standard gravity. Its unit is seconds; a larger value means more impulse per kilogram of propellant.">?</button>
+</span>
+<span class="readout-value " id="read-rocket-isp">—</span>
+</div>
+<p class="field-note">Launch to measure the complete flight. No air drag; radial gravity and a simplified nozzle model.</p>
+</div>
+</details>
+
+<section class="post-flight-summary post-flight-hidden" id="post-flight-summary" aria-label="Flight result">
+<h3 class="section-header">The field notes</h3>
+<div class="readout-grid">
+<span class="readout-label">Distance from pad</span>
+<span class="readout-value " id="read-post-range">—</span>
+<span class="readout-label">Flight time</span>
+<span class="readout-value " id="read-post-flighttime">—</span>
+<span class="readout-label">Engine on</span>
+<span class="readout-value " id="read-post-burntime">—</span>
+<span class="readout-label">Integrated ideal Δv</span>
+<span class="readout-value " id="read-post-dv-tsiolkovsky">—</span>
+<span class="readout-label">Speed at burnout</span>
+<span class="readout-value " id="read-post-dv-actual">—</span>
+<span class="readout-label">Speed difference<button type="button" class="tooltip-trigger" aria-label="About Speed difference" data-tip="Integrated thrust delta-v minus speed at burnout. Gravity, steering and initial conditions can all contribute. This is not a measurement of gravity loss. A powered impact has no burnout speed to compare.">?</button>
+</span>
+<span class="readout-value " id="read-post-gravity-loss">—</span>
+</div>
+</section>
+<details class="lab-details">
+<summary>Engine & vehicle workshop</summary>
+<div class="details-content">
+<div class="slider-row">
+<label for="rocket-propellant">Propellant pair</label>
+<select id="rocket-propellant" class="rocket-select" aria-label="Propellant pair">
+</select>
+<p class="propellant-note" id="propellant-note">
+</p>
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-drymass">Empty vehicle mass</label>
+<button type="button" class="tooltip-trigger" aria-label="About Empty vehicle mass" data-tip="&lt;b&gt;The mass that stays aboard&lt;/b&gt;&lt;br&gt;Dry mass includes the empty tanks, engine and payload. Lower dry mass improves thrust-to-weight ratio and ideal delta-v.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-drymass" for="slider-rocket-drymass">100 kg</output>
+</div>
+<input type="range" id="slider-rocket-drymass" min="1" max="5000" value="100" step="1" aria-label="Empty vehicle mass">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pc">Chamber pressure</label>
+<button type="button" class="tooltip-trigger" aria-label="About Chamber pressure" data-tip="&lt;b&gt;Pressure makes the push&lt;/b&gt;&lt;br&gt;Chamber pressure and throat area set the engine’s propellant flow and thrust. Hardware strength and engine mass are not calculated in this simplified model.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-pc" for="slider-rocket-pc">180 bar</output>
+</div>
+<input type="range" id="slider-rocket-pc" min="10" max="300" value="180" step="1" aria-label="Chamber pressure">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-dt">Throat diameter</label>
+<button type="button" class="tooltip-trigger" aria-label="About Throat diameter" data-tip="&lt;b&gt;The nozzle’s narrowest point&lt;/b&gt;&lt;br&gt;A larger throat gives more thrust and consumes propellant faster. Its area grows with the square of its diameter.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-dt" for="slider-rocket-dt">15 mm</output>
+</div>
+<input type="range" id="slider-rocket-dt" min="5" max="200" value="15" step="1" aria-label="Throat diameter">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-eps">Expansion ratio</label>
+<button type="button" class="tooltip-trigger" aria-label="About Expansion ratio" data-tip="&lt;b&gt;How wide is the bell?&lt;/b&gt;&lt;br&gt;Exit area ÷ throat area. Expansion and surrounding pressure affect exhaust thrust. Nozzle separation uses a simple teaching approximation; atmospheric drag is not modelled.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-eps" for="slider-rocket-eps">20</output>
+</div>
+<input type="range" id="slider-rocket-eps" min="5" max="200" value="20" step="1" aria-label="Expansion ratio">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-mr">Oxidizer / fuel ratio</label>
+<button type="button" class="tooltip-trigger" aria-label="About Oxidizer / fuel ratio" data-tip="&lt;b&gt;Mixture ratio by mass&lt;/b&gt;&lt;br&gt;Lower O/F is more fuel-rich; higher O/F is more fuel-lean. Here the ratio changes the tank split only. Combustion properties are fixed for each propellant pair, so changing this ratio does not tune engine performance.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-mr" for="slider-rocket-mr">2.56</output>
+</div>
+<input type="range" id="slider-rocket-mr" min="2.2" max="2.9" value="2.56" step="0.01" aria-label="Oxidizer / fuel ratio">
+</div>
+<button type="button" class="rocket-efficiency-toggle" id="efficiency-toggle" aria-controls="efficiency-section" aria-expanded="false">Engine efficiencies <span class="collapse-arrow" id="efficiency-arrow" aria-hidden="true">›</span>
+</button>
+<div class="slider-group rocket-efficiency-hidden" id="efficiency-section">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-etac">Combustion efficiency</label>
+<button type="button" class="tooltip-trigger" aria-label="About Combustion efficiency" data-tip="The fraction of the ideal characteristic exhaust velocity achieved by combustion.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-etac" for="slider-rocket-etac">0.95</output>
+</div>
+<input type="range" id="slider-rocket-etac" min="0.8" max="1" value="0.95" step="0.01" aria-label="Combustion efficiency">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-etan">Nozzle efficiency</label>
+<button type="button" class="tooltip-trigger" aria-label="About Nozzle efficiency" data-tip="The fraction of the ideal thrust coefficient achieved by the nozzle.">?</button>
+</span>
+<output class="slider-value" id="val-rocket-etan" for="slider-rocket-etan">0.95</output>
+</div>
+<input type="range" id="slider-rocket-etan" min="0.8" max="1" value="0.95" step="0.01" aria-label="Nozzle efficiency">
+</div>
+</div>
+</div>
+</details>
+<details class="lab-details">
+<summary>Guidance</summary>
+<div class="details-content">
+<div class="slider-row">
+<label for="rocket-guidance">Steering</label>
+<select id="rocket-guidance" class="rocket-select">
+<option value="fixed">Hold launch angle</option>
+<option value="pitch_program">Timed pitch</option>
+<option value="prograde_lock">Follow velocity</option>
+</select>
+<p class="field-note">The rocket’s nose shows thrust direction. Its velocity arrow shows where it is travelling.</p>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-pitch-sub">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-end">Final angle</label>
+</span>
+<output class="slider-value" id="val-rocket-pitch-end" for="slider-rocket-pitch-end">45°</output>
+</div>
+<input type="range" id="slider-rocket-pitch-end" min="0" max="89" value="45" step="1" aria-label="Final angle">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-t1">Start turning at</label>
+</span>
+<output class="slider-value" id="val-rocket-pitch-t1" for="slider-rocket-pitch-t1">5 s</output>
+</div>
+<input type="range" id="slider-rocket-pitch-t1" min="0" max="60" value="5" step="0.5" aria-label="Start turning at">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-t2">Finish turning at</label>
+</span>
+<output class="slider-value" id="val-rocket-pitch-t2" for="slider-rocket-pitch-t2">20 s</output>
+</div>
+<input type="range" id="slider-rocket-pitch-t2" min="1" max="120" value="20" step="0.5" aria-label="Finish turning at">
+</div>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-prograde-sub">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-prograde-vmin">Follow above speed</label>
+</span>
+<output class="slider-value" id="val-rocket-prograde-vmin" for="slider-rocket-prograde-vmin">10 m/s</output>
+</div>
+<input type="range" id="slider-rocket-prograde-vmin" min="1" max="100" value="10" step="1" aria-label="Follow above speed">
+</div>
+</div>
+</div>
+</details>
+</section>
+      <footer class="lab-footer">Launch. Wonder. Tweak. Repeat.<span>Small experiments, wonderfully big questions.</span>
+</footer>
+    </div>
+  </aside>
+  <section class="canvas-area" id="scene" tabindex="-1" aria-label="Launch field and flight controls">
+<canvas id="sim-canvas" aria-label="Animated launch field. Flight measurements and controls are also available as text.">
+</canvas>
+</section>
+</main>
+<dialog class="planet-fact-dialog" id="planet-fact-dialog" aria-labelledby="planet-fact-title">
+<article class="planet-fact-card" id="planet-fact-card">
+<header class="planet-fact-hero">
+<img class="planet-fact-artwork" id="planet-fact-artwork" alt="" width="320" height="320" decoding="async" aria-hidden="true">
+<div class="planet-fact-heading">
+<p class="planet-fact-kind" id="planet-fact-kind">ROCKY PLANET · HOME</p>
+<h2 id="planet-fact-title">Earth</h2>
+<p id="planet-fact-tagline">The only world known to have oceans and life.</p>
+</div>
+<form method="dialog">
+<button class="planet-fact-close" value="close" aria-label="Close planet fact">×</button>
+</form>
+</header>
+<p class="planet-fact-invitation"><strong>Ten little facts. Big discoveries.</strong> Select any fact to see what it means.</p>
+<section class="planet-fact-stats" aria-label="Top facts">
+<button type="button" data-fact="mass" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Mass</span><strong id="planet-fact-mass">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="diameter" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Diameter</span><strong id="planet-fact-diameter">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="distance" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Distance from Sun</span><strong id="planet-fact-distance">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="gravity" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Gravity</span><strong id="planet-fact-gravity">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="tilt" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Axial tilt</span><strong id="planet-fact-tilt">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="day" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Day length</span><strong id="planet-fact-day">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="year" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Year / orbit</span><strong id="planet-fact-year">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="temp-average" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Average temp</span><strong id="planet-fact-temp-average">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="temp-min" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Minimum temp</span><strong id="planet-fact-temp-min">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+<button type="button" data-fact="temp-max" aria-haspopup="dialog" aria-controls="fact-explanation"><span class="fact-tile-label">Maximum temp</span><strong id="planet-fact-temp-max">—</strong><span class="fact-tile-help" aria-hidden="true">?</span></button>
+</section>
+<div class="planet-fact-details">
+<section>
+<p class="planet-fact-section-label">ATMOSPHERE</p>
+<h3>What surrounds it?</h3>
+<p id="planet-fact-atmosphere"></p>
+</section>
+<section>
+<p class="planet-fact-section-label">EXPLORATION</p>
+<h3>Our visits</h3>
+<p id="planet-fact-exploration"></p>
+</section>
+</div>
+<footer class="planet-fact-footer">
+<p><span id="planet-fact-temperature-note"></span> <span class="planet-fact-tilt-note">Axial tilt is the lean of the spin axis; Earth’s lean drives our seasons.</span></p>
+<a href="https://nssdc.gsfc.nasa.gov/planetary/factsheet/" target="_blank" rel="noreferrer">Rounded NASA / JPL data ↗</a>
+</footer>
+</article>
+</dialog>
+<script type="module" src="/src/main.ts">
+</script>
+</body>
+</html>
