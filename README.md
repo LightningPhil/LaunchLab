@@ -38,7 +38,7 @@ Start with **Let it fly** or the ready-to-fly rocket. Each setup has its own **R
 
 The book button immediately left of Settings opens a separate manual with a topics index and reading pane. It covers the controls, measurements, playback, comparisons and sound, and links to the educational companion for the science behind the cannon and rocket settings. Reading pauses the experiment. The About page introduces Philip Leichauer. The proprietary licence and third-party notices are imported directly from `LICENSE` and `THIRD_PARTY_NOTICES.txt` so the app and repository show the same terms.
 
-In the **Orrery**, drag with one finger to rotate, pinch to zoom, or move two fingers together to pan sideways and up or down. Panning and pinching can be combined. With a mouse, drag to rotate, scroll to zoom and right-drag to pan. **Fit system** brings the solar system back into view.
+The **Orrery** starts at **1 week per minute**. Drag with one finger to rotate, pinch to zoom, or move two fingers together to pan sideways and up or down. Panning and pinching can be combined. With a mouse, drag to rotate, scroll to zoom and right-drag to pan. **Fit system** brings the solar system back into view.
 
 ## Explore the Solar System
 
@@ -113,6 +113,8 @@ Conventions: `strict` is off in `tsconfig.json` because the older presentation m
 
 ## License
 
-Copyright © 2026 Philip Leichauer. All rights reserved. This release is proprietary software, governed by [LICENSE](LICENSE). Access to the source or build instructions does not grant permission to copy, modify, redistribute or self-host it.
+Copyright © 2026 Philip Leichauer. All rights reserved. The authorised hosted service is **free for personal use and all educational purposes**, including teaching, home education, tutoring, educational research and demonstrations in non-profit or commercial educational organisations. No separate permission or licence fee is required for those uses.
+
+This release remains proprietary software, governed by [LICENSE](LICENSE). Access to the source or build instructions does not grant permission to copy, modify, redistribute or self-host it.
 
 Third-party components retain their own licences; see [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). Earlier copies validly supplied under MIT remain subject to their original permissions; this licence change does not retrospectively revoke those rights.

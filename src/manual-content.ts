@@ -73,6 +73,8 @@ export const MANUAL_TOPICS = [
     id: 'learning', name: 'Explore & learn', title: 'Follow the question a little further.',
     intro: 'Explore the Solar System is the educational companion, reached from the centre of the top bar.',
     body: `<p>Use its topics index or search to find a world, a moon, a belt of small bodies, or the science behind a launch. Click a world or its name on the illustrated map to open its article.</p>
+    <h3>At home or in education</h3><p>The authorised Launch Lab service is free for personal use and all educational purposes, including classroom teaching, home education, tutoring, educational research and demonstrations. Schools and other educational organisations may use it, whether non-profit or commercial, without needing separate permission or paying a licence fee.</p>
+    <h3>Watch the worlds move</h3><p>Open <b>Orrery</b> for a moving solar system. It starts at <b>1 week per minute</b>; choose another speed whenever you like. Drag to rotate, pinch to zoom and move two fingers together to pan. With a mouse, scroll to zoom and right-drag to pan.</p>
     <h3>Choose your depth</h3><p><b>First look</b> gives the big idea. <b>Explore</b> adds the how and why. <b>Go deeper</b> introduces the science underneath. You can change levels whenever you like.</p>
     <div class="manual-learning-links"><a href="#wiki/solar-system/1"><strong>Explore the Solar System</strong><span>Worlds, moons, orbits and the belts between them ↗</span></a>
     <a href="#wiki/cannons/1"><strong>How a cannon works</strong><span>History, pressure and an interactive cutaway ↗</span></a>
@@ -86,11 +88,11 @@ export const MANUAL_TOPICS = [
     <p>It is a place to follow a question, try a small experiment and see something unexpected. The physics invites a closer look; the characters occasionally have other ideas.</p>
     <p>The hope is simply that it makes room for a little curiosity, whether you are learning on your own, sharing a tablet or exploring together in a classroom.</p>
     <div class="manual-signature"><span>Philip Leichauer</span><small>Creator of Launch Lab</small></div>
-    <p>Launch Lab is proprietary software. Please enjoy the authorised service under its terms of use. The full licence and third-party notices are in the next topic.</p>`,
+    <p>Launch Lab is free for personal use and all educational purposes through the authorised service. It remains proprietary software; the full licence and third-party notices are in the next topic.</p>`,
   },
   {
     id: 'licence', name: 'Licence & notices', title: 'Explore the lab. Respect its creator.',
     intro: 'Copyright © 2026 Philip Leichauer. All rights reserved, subject to the permissions and exceptions below.',
-    body: '<pre class="manual-licence"></pre><h3>Third-party notices</h3><pre class="manual-licence manual-third-party-notices"></pre>',
+    body: '<p><strong>Free for personal use and all educational purposes.</strong> You may use the authorised service for teaching, study, educational research, demonstrations, home education and tutoring, including in non-profit or commercial educational organisations. No separate permission or licence fee is required for these uses. Copying, modifying, redistributing or self-hosting the software remains subject to the full terms below.</p><pre class="manual-licence"></pre><h3>Third-party notices</h3><pre class="manual-licence manual-third-party-notices"></pre>',
   },
 ] as const;
