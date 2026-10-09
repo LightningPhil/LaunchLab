@@ -55,7 +55,11 @@ export function installManual(onOpen: () => void) {
   manual.addEventListener('click', event => {
     const target = event.target as Element;
     const topic = target.closest<HTMLButtonElement>('[data-manual-topic]');
-    if (topic) render(Number(topic.dataset.manualTopic));
+    if (topic) {
+      const value = topic.dataset.manualTopic!;
+      const index = /^\d+$/.test(value) ? Number(value) : MANUAL_TOPICS.findIndex(entry => entry.id === value);
+      if (index >= 0 && index < MANUAL_TOPICS.length) render(index);
+    }
     const link = target.closest<HTMLAnchorElement>('a[href^="#wiki/"]');
     if (link && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
       // Close before hash navigation opens the companion: only one reading

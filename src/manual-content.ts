@@ -88,7 +88,7 @@ export const MANUAL_TOPICS = [
     <p>It is a place to follow a question, try a small experiment and see something unexpected. The physics invites a closer look; the characters occasionally have other ideas.</p>
     <p>The hope is simply that it makes room for a little curiosity, whether you are learning on your own, sharing a tablet or exploring together in a classroom.</p>
     <div class="manual-signature"><span>Philip Leichauer</span><small>Creator of Launch Lab</small></div>
-    <p>Launch Lab is free for personal use and all educational purposes through the authorised service. It remains proprietary software; the full licence and third-party notices are in the next topic.</p>`,
+    <p class="manual-copyright">© 2026 Philip Leichauer · Free for personal and educational use<br><button type="button" data-manual-topic="licence" aria-controls="manual-page">Licence &amp; notices <span aria-hidden="true">→</span></button></p>`,
   },
   {
     id: 'licence', name: 'Licence & notices', title: 'Explore the lab. Respect its creator.',
