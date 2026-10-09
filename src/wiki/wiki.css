@@ -166,10 +166,22 @@ body.atlas-open { overflow: hidden; }
 .atlas-takeaway > span { display: block; margin-bottom: 17px; font: 30px Georgia,serif; color: #799271; }
 .atlas-takeaway .atlas-kicker { color: #66734f; font-size: 10.5px; letter-spacing: 1px; }
 .atlas-takeaway > p:last-child { margin-top: 11px; font: 20px/1.5 Georgia,serif; color: #49654d; }
-.atlas-equation { margin-top: 25px; padding: 20px; background: #edeedf; border-left: 3px solid #aebd91; border-radius: 0 7px 7px 0; }
-.atlas-equation > span { color: #6f7858; font: 700 10.5px var(--font-mono); letter-spacing: 1.6px; }
-.atlas-equation p { margin: 12px 0; font: 22px/1.65 Georgia,serif; color: #335c4c; overflow-wrap: anywhere; }
-.atlas-equation small { display: block; color: #5c6a55; font-size: 13.5px; line-height: 1.75; }
+.atlas-prose { min-width: 0; }
+.atlas-equation { margin: 25px 0; padding: 24px; background: #edeedf; border-left: 3px solid #aebd91; border-radius: 0 7px 7px 0; }
+.atlas .atlas-equation-label { margin: 0 0 18px; color: #5e6748; font: 700 11px/1.5 var(--font-mono); letter-spacing: 1.6px; }
+.atlas-equation p { margin: 12px 0; color: #42554d; font-size: 15.5px; line-height: 1.8; }
+.atlas-equation p:last-child { margin-bottom: 0; }
+.atlas-equation-step + .atlas-equation-step { margin-top: 24px; padding-top: 24px; border-top: 1px solid #ccd4bf; }
+.atlas-equation-step h4 { margin: 0 0 12px; color: #335c4c; font-size: 17px; line-height: 1.45; }
+.atlas-math-display { max-width: 100%; overflow-x: auto; padding: 6px 2px; color: #264f3e; font-size: 1.08rem; }
+.atlas-math-display:focus-visible { outline: 2px solid #557553; outline-offset: 3px; border-radius: 3px; }
+.atlas-math-display .katex-display { margin: .5em 0; text-align: left; }
+.atlas-math-display .katex-display > .katex { text-align: left; }
+.atlas-prose p .katex { font-size: 1.05em; }
+.atlas-equation-details { margin-top: 24px; padding-top: 18px; border-top: 1px solid #bcc9ad; }
+.atlas-equation-details summary { cursor: pointer; color: #335c4c; font-size: 15px; font-weight: 700; line-height: 1.6; }
+.atlas-equation-details[open] summary { margin-bottom: 18px; }
+.atlas-equation-details .atlas-math-display { font-size: .95rem; }
 .atlas-section-top { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .atlas h3 { margin: 6px 0 0; font: 700 27px/1.2 Georgia,serif; letter-spacing: -.3px; }
 .atlas-moons { padding: 27px; border: 1px solid #d8dfd4; background: #f2f5ed; border-radius: 9px; margin-bottom: 36px; }
@@ -321,7 +333,8 @@ a.atlas-moon-chip:hover { border-color: #8bad95; background: #e7eedf; }
   .atlas-pager a { min-height: 72px; padding: 12px 14px; }
   .atlas-pager strong { font-size: 18px; }
   .atlas-equation { padding: 17px; }
-  .atlas-equation p { font-size: 19px; }
+  .atlas-equation p { font-size: 15px; }
+  .atlas-math-display { font-size: 1rem; }
   .atlas-mechanics { margin: 0 -18px; border-radius: 0; }
 }
 @media(max-width:360px) {

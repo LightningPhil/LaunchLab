@@ -1,9 +1,22 @@
 export type Level = 0 | 1 | 2;
+export interface EquationStep {
+  heading?: string;
+  /** LaTeX, without delimiters. Use String.raw when writing backslashes. */
+  expression: string;
+  explanation: string[];
+}
+export interface EquationBlock {
+  label: string;
+  intro?: string;
+  steps: EquationStep[];
+  details?: { summary: string; intro: string; steps: EquationStep[] };
+}
 export interface Reading {
   heading: string;
-  paragraphs: string[];
+  /** Plain text with optional inline \\(LaTeX\\), or a standalone equation block. */
+  paragraphs: (string | EquationBlock)[];
   takeaway: string;
-  equation?: { expression: string; explanation: string };
+  equation?: EquationBlock;
 }
 export interface Article {
   id: string; title: string; group: string; kind: string; description: string;
@@ -46,9 +59,9 @@ export const ARTICLES: Article[] = [
       { ...detailedReading('A disc became a planetary system.', [
         'About 4.6 billion years ago, a cloud of gas and dust collapsed under gravity. As it contracted, its rotation became faster, rather as a spinning skater speeds up by drawing their arms in. Most material collected in the young Sun; a rotating disc around it supplied the building blocks of planets.',
         'Small solids collided and sometimes stuck together. Growing bodies attracted more material, while further collisions and gravitational encounters could break bodies apart or rearrange their orbits. Formation was a changing process: a planet’s present location need not be exactly where all its ingredients first collected.',
-        'In a simple two-body model, a bound orbit is an ellipse. The semi-major axis is half the ellipse’s longest width, not the object’s moment-to-moment distance from the Sun. Kepler’s period relation below uses that measure. For a small object with a semi-major axis of 4 AU, T² ≈ 4³ = 64, so its period is about 8 Earth years.',
+        String.raw`In a simple two-body model, a bound orbit is an ellipse. The semi-major axis is half the ellipse’s longest width, not the object’s moment-to-moment distance from the Sun. Kepler’s period relation below uses that measure. For a small object with a semi-major axis of 4 AU, \(T^2 \approx 4^3 = 64\), so its period is about 8 Earth years.`,
         'The approximation treats the Sun as overwhelmingly more massive than the orbiting object. More precisely, both bodies orbit their shared centre of mass. In the real Solar System, other worlds also tug on them. Simple laws reveal the main pattern; detailed predictions account for these additional forces and the motion of the Sun itself.',
-      ], 'A diagram shows relationships; it cannot show every real size, distance and tilt at once.'), equation: { expression: 'T² ≈ a³', explanation: 'For objects orbiting the Sun: T is the orbital period in Earth years and a is the semi-major axis in astronomical units (AU). One AU is about Earth’s average distance from the Sun. This approximation neglects the orbiting body’s mass and perturbations from other bodies.' } },
+      ], 'A diagram shows relationships; it cannot show every real size, distance and tilt at once.'), equation: { label: 'THE RELATIONSHIP', steps: [{ expression: String.raw`T^2 \approx a^3`, explanation: [String.raw`For objects orbiting the Sun, \(T\) is the orbital period in Earth years and \(a\) is the semi-major axis in astronomical units (AU). One AU is about Earth’s average distance from the Sun. This approximation neglects the orbiting body’s mass and tugs from other bodies.`] }] } },
     ], related: ['sun', 'moons', 'kuiper-belt', 'asteroid-belt'], sources: [...nasa('solar-system/solar-system-facts'), ...nasa('learn/basics-of-space-flight/chapter1-1'), ...nasa('solar-system/orbits-and-keplers-laws')],
   },
   {
@@ -378,7 +391,7 @@ export const ARTICLES: Article[] = [
       {
         heading:'A fast fire makes a powerful push.',
         paragraphs:[
-          'Cannon developed in medieval China. Small metal examples survive from the late 1200s; nobody can confidently name one inventor or the exact first day. Over the following centuries, cannon changed castles, ships and warfare.',
+          'Cannons were developed in medieval China. Small metal examples survive from the late 1200s; nobody can confidently name one inventor or the exact first day. Over the following centuries, cannons changed castles, ships and warfare.',
           'Their propellant was gunpowder, also called black powder. Ignition starts very rapid burning, releasing heat and producing gas. Confined behind the ball, that hot gas presses on its back and pushes it hard. The solid ball itself does not need to explode.',
           'The ball gains speed as it travels along the barrel. As the space behind it grows, the gas expands and its pressure eventually falls. At the muzzle, gas rushes out around the departing ball. The cannon recoils backwards; after the brief launch, gravity and the air shape the ball’s flight.',
         ], takeaway:'The ball is pushed by hot gas under pressure. Fast burning supplies the energy.',
@@ -397,13 +410,29 @@ export const ARTICLES: Article[] = [
         heading:'Following the energy through the barrel.',
         paragraphs:[
           'Historians distinguish a surviving object’s date from the invention of a technology. An early cannon proves the idea already existed; it does not prove nobody made one earlier. Our illustration evokes a later muzzle-loading cannon rather than reconstructing the first Chinese examples. The fuse is a visible ignition cue; historical ignition methods varied.',
-          'For the science, treat the ball as a moving mass and the gas behind it as an expanding reservoir. Pressure difference across the ball produces force over its area. Integrating the net force through distance gives the increase in kinetic energy. Pressure can peak early while speed continues increasing towards the muzzle.',
-          'Kinetic energy is K = ½mv². For the same mass, doubling speed requires four times the kinetic energy. Force and energy are not interchangeable: force describes the push, while work measures energy transferred as that push acts through distance. A pressure curve against time is therefore not, by itself, a graph of the work delivered to the ball.',
+          'For the science, picture the ball as a moving mass and the gas behind it as an expanding store of energy. The pressure difference across the ball gives it a forward push. As that push acts along the barrel, energy passes to the ball. Pressure can peak early while speed keeps increasing towards the muzzle.',
+          'Kinetic energy is the energy of motion. For the same mass, doubling speed means four times the kinetic energy. Force describes the push at a particular moment; work is the energy transferred as a push acts through a distance. That is why a pressure curve against time is not, by itself, a picture of all the energy given to the ball. The relationships below connect these ideas one step at a time.',
           'The exhibit numerically follows a smooth release of heat, gas expansion, work on the ball and small losses. Its charge presets, gas properties and time scale are invented classroom quantities. All balls have the same size and idealised material masses. Relative pressure and speed use fixed comparison scales across experiments; they are not predictions for a historical gun.',
           'The gas and ball influence each other. A lighter ball begins moving sooner, enlarging the gas volume earlier and changing the subsequent pressure. This is why changing mass cannot be analysed by taking one unchanged pressure curve and merely dividing the force by a new mass. Following both parts of the energy balance explains the linked changes seen in the experiment.',
           'Real events also involve non-uniform burning, leakage, friction, heat transfer, deformation, sound and a complicated gas jet. This model stops driving the ball at muzzle clearance and then lets the remaining gas pressure fade. Its short coast after the muzzle omits gravity, air resistance and the brief push the external jet can add. That boundary makes the main energy transfer easy to inspect without pretending to reproduce every detail.',
         ], takeaway:'A useful model explains a relationship while making its limits visible.',
-        equation:{expression:'F = ΔP × A      a = Fnet / m      ΔK = ∫ Fnet dx',explanation:'Pressure difference ΔP acts over area A. Net force changes the velocity of mass m; work over distance changes kinetic energy K. These are general relationships, not dimensions or loading specifications.'},
+        equation:{label:'THE RELATIONSHIP',intro:'Pressure becomes a push; a push changes motion. The symbols are a short way of telling that story.',steps:[
+          {heading:'1. Pressure gives a force',expression:String.raw`F_{\mathrm{pressure}} = \Delta p\,A`,explanation:[
+            String.raw`Read this as “pressure force equals pressure difference times area”. \(\Delta\) (delta) means “difference”: \(\Delta p\) is pressure behind the ball minus pressure in front. \(A\) is the ball’s cross-sectional area, the circle seen looking along the barrel. Pressure is measured in pascals, area in square metres and force in newtons.`,
+            'A bigger pressure difference gives a stronger push over the same area. Pressure acts over the whole circle, so all those small pushes add together.',
+          ]},
+          {heading:'2. The remaining push changes speed',expression:String.raw`a = \frac{F_{\mathrm{net}}}{m}`,explanation:[
+            String.raw`\(F_{\mathrm{net}}\) is the forward pressure force after subtracting resistance, such as friction. Divide it by the ball’s mass \(m\) to get acceleration \(a\): how quickly its velocity changes. For the same net force, twice the mass means half the acceleration.`,
+            'A weakening push can still make the ball faster. Its speed only starts falling when the net force acts against its motion.',
+          ]},
+          {heading:'3. Add up the push along the journey',expression:String.raw`\Delta K = \int_{x_{\mathrm{start}}}^{x_{\mathrm{end}}} F_{\mathrm{net}}(x)\,\mathrm{d}x`,explanation:[
+            String.raw`\(K\) is kinetic energy, measured in joules, so \(\Delta K\) means the change in that energy. The tall \(\int\) sign says “add up”: take the net force at each position \(x\), multiply it by a tiny distance \(\mathrm{d}x\), then add all those contributions along the barrel. This allows the force to change during the journey.`,
+            'If the force stayed constant, this would simply be force times distance. A push acting over more distance can transfer more energy, even without a higher peak force.',
+          ]},
+          {heading:'4. Connect that energy to speed',expression:String.raw`K = \tfrac{1}{2}mv^2`,explanation:[
+            String.raw`\(v\) is speed and \(v^2\) means speed multiplied by itself. Keep the mass the same and double the speed: the energy becomes four times as large. These general relationships explain the experiment; its invented settings are not measurements of a historical cannon.`,
+          ]},
+        ]},
       },
     ], related: ['rockets', 'earth', 'moon'], sources: [
       ['Royal Armouries · Cannon in the Hundred Years’ War','https://royalarmouries.org/objects-and-stories/stories/the-hundred-years-war-1337-1453'],
@@ -431,14 +460,40 @@ export const ARTICLES: Article[] = [
         'The travelling experiment above keeps its nozzle performance fixed. The same propellant and payload give the same final velocity change at different burn rates, under its ideal free-space assumptions. In the Advanced nozzle lab, hold the engine still and inspect the pressure and speed along the gas’s path instead.',
         'Thrust is a force; acceleration also depends on the mass being pushed. As propellant leaves, the rocket becomes lighter, so the same thrust can produce greater acceleration later in a burn. Compare burn rates while holding propellant and payload fixed, then change the payload separately to distinguish these two effects.',
       ],takeaway:'The throat controls flow; the bell converts more of the gas’s energy into exhaust motion.'},
-      {heading:'Read the nozzle with energy and momentum.',paragraphs:[
-        'Our simplified nozzle is a smooth passage with steady flow. We treat the gas as ideal, neglect heat exchange with the walls and use one representative speed and pressure at each cross-section. The throat reaches Mach 1; Mach number means speed divided by the local speed of sound. The diverging section then permits supersonic expansion.',
-        'Thrust has two parts. First, the outgoing gas carries momentum at a rate equal to mass flow times exhaust velocity. Second, any difference between exit pressure and surrounding pressure acts across the exit area. Matching those pressures gives the ideal best expansion for fixed chamber conditions in air.',
-        'A larger throat at the same pressure passes more gas. A wider bell at the same throat changes expansion and exit speed. These are different effects: a larger engine can have more thrust without getting more impulse from each kilogram of propellant. Specific impulse helps distinguish those ideas.',
-        'For constant effective exhaust velocity, the ideal rocket equation is Δv = vₑff ln(mstart / mend). Effective velocity includes the pressure contribution to thrust and differs from the gas speed in the equation below. The masses include the vehicle and payload as well as remaining propellant. Δv describes the velocity change available under ideal free-space assumptions.',
-        'A starting-to-ending mass ratio of 2 gives Δv ≈ 0.693vₑff; a ratio of 4 gives about 1.386vₑff. Doubling that ratio doubles the ideal velocity change in this example, rather than making it four times larger. A real surface launch must also overcome local weight and incurs gravity and drag losses: enough ideal Δv does not by itself guarantee lift-off.',
-        'The travelling experiment’s index scales are invented classroom quantities. The advanced panel instead uses real units and an ideal-gas nozzle calculation, with approximate gas properties and an illustrative mixture curve. Neither includes cooling, pump power, nozzle mass or detailed chemistry. Use Advanced info for each setting, at whichever reading level suits you.',
-      ],takeaway:'Mass flow, exhaust speed and exit pressure together determine thrust.',equation:{expression:'F = ṁvₑ + (pₑ − pₐ)Aₑ',explanation:'F is thrust in newtons; ṁ is exhaust mass flow in kg/s; vₑ is exhaust speed in m/s. pₑ and pₐ are exit and ambient pressure in pascals; Aₑ is exit area in m². Here vₑ is the gas speed, not effective exhaust velocity.'}},
+      {heading:'Follow the gas. Follow the push.',paragraphs:[
+        'Imagine following a small parcel of hot gas through the engine. At the throat it reaches Mach 1: the local speed of sound. Beyond that narrow neck, the widening bell lets the supersonic gas expand and speed up while its pressure falls. Our model keeps the flow steady and treats the gas as ideal, leaving out heat lost to the walls.',
+        'The throat and bell do different jobs. A larger throat at the same chamber pressure lets more gas through each second. A wider bell with the same throat gives that gas more room to expand. One changes how much gas flows; the other changes how it leaves. More thrust does not always mean more useful push from each kilogram of propellant.',
+        'There is another part of the story: as propellant leaves, the rocket gets lighter. The same thrust can then change its velocity more quickly. The rocket equation brings the exhaust’s performance and the changing mass together.',
+        {label:'THE IDEAL ROCKET EQUATION',steps:[
+          {expression:String.raw`\Delta v = v_{\mathrm{eff}}\ln\!\left(\frac{m_{\mathrm{start}}}{m_{\mathrm{end}}}\right)`,explanation:[
+            String.raw`Read it as “available velocity change equals effective exhaust velocity times a measure of how much lighter the rocket becomes”. \(\Delta v\), said “delta vee”, is that velocity change. \(v_{\mathrm{eff}}\) describes the engine’s useful push per kilogram of propellant, including the pressure effect explained below. Both are measured in metres per second.`,
+            String.raw`Divide the whole rocket’s starting mass \(m_{\mathrm{start}}\) by its ending mass \(m_{\mathrm{end}}\). Both include the vehicle, payload and any propellant still aboard. \(\ln\) means natural logarithm: a calculator function that grows more slowly than the mass ratio. You do not need to calculate it to see the pattern: carrying extra propellant also means carrying extra mass at the start.`,
+            String.raw`If the rocket ends at half its starting mass, the ratio is 2 and \(\Delta v \approx 0.693\,v_{\mathrm{eff}}\). If it ends at a quarter, the ratio is 4 and \(\Delta v \approx 1.386\,v_{\mathrm{eff}}\). That gives twice the ideal velocity change in this example.`,
+            'This assumes constant effective exhaust velocity and no gravity or air resistance during the burn. A real launch has both to contend with, and enough thrust to lift off is a separate requirement.',
+          ]},
+        ]},
+        'The travelling experiment uses invented classroom quantities to make the pattern easy to compare. The Advanced nozzle lab uses real units with approximate gas properties and a simplified mixture curve. Neither models cooling, pumps, nozzle weight or detailed chemistry. Open Advanced info to explore what each setting changes.',
+      ],takeaway:'How much gas leaves, how fast it leaves and its pressure together determine thrust.',equation:{label:'THE RELATIONSHIP',intro:'Thrust is the engine’s push. We can account for it in two parts, then connect it to the rocket equation above.',steps:[
+        {heading:'Two contributions to thrust',expression:String.raw`F = \dot{m}\,v_e + (p_e-p_a)\,A_{\mathrm{exit}}`,explanation:[
+          String.raw`\(F\) is thrust, measured in newtons. In the first part, \(\dot{m}\) (“m dot”) is the mass of gas leaving each second, in kilograms per second. Multiply it by exhaust speed \(v_e\), measured relative to the rocket in metres per second. This accounts for the momentum carried away by the gas. More gas, or faster gas, makes this part larger.`,
+          String.raw`The second part accounts for pressure. \(p_e\) is gas pressure at the exit and \(p_a\) is the surrounding, or ambient, pressure, both in pascals. Subtract them, then multiply by the exit opening’s area \(A_{\mathrm{exit}}\), in square metres. Higher exit pressure adds to thrust; lower exit pressure subtracts from it. That subtraction need not outweigh the first part.`,
+        ]},
+        {heading:'From thrust to effective exhaust velocity',expression:String.raw`v_{\mathrm{eff}} = \frac{F}{\dot{m}} = v_e + \frac{(p_e-p_a)\,A_{\mathrm{exit}}}{\dot{m}}`,explanation:[
+          String.raw`Divide the total thrust by the propellant used each second. The result, \(v_{\mathrm{eff}}\), is the effective exhaust velocity used in the rocket equation. It includes both contributions to thrust, so it is not always the same as the actual gas speed \(v_e\). The subscript “eff” just means “effective”.`,
+        ]},
+        {heading:'Choose an exit area that suits the air',expression:String.raw`p_e = p_a \quad\Longrightarrow\quad F = \dot{m}\,v_e`,explanation:[
+          String.raw`For fixed chamber conditions and throat area, an ideal nozzle in air gives its best thrust when exit pressure matches ambient pressure. Adjusting \(A_{\mathrm{exit}}\) changes both exit pressure and speed: a wider bell lets supersonic gas expand further, lowering its pressure and increasing its speed. At the match, the pressure term is zero. The gain in gas speed and the changing pressure contribution have reached their best balance.`,
+          'If exit pressure is too high, more expansion inside the nozzle could help. If it is too low, the nozzle has expanded the gas too far for that surrounding air; severe overexpansion can detach the flow from the walls. As a rocket climbs, ambient pressure falls, so one fixed bell cannot stay perfectly matched throughout the journey.',
+          'In vacuum, no finite exit area reaches an exact pressure match in this ideal model. A larger bell offers diminishing gains, while a real bell adds weight. Try Auto for air and Auto for vacuum in the Advanced nozzle lab to compare the shapes.',
+        ]},
+      ],details:{summary:'One step further: how pressure matching gives an exit area',intro:'The calculation has two steps: find the exit Mach number that gives the target pressure, then use it to find the area. These equations assume steady, ideal-gas flow with no shocks, friction or heat exchange, and a choked throat.',steps:[
+        {heading:'1. Find the exit Mach number for the surrounding pressure',expression:String.raw`M_e = \sqrt{\frac{2}{\gamma-1}\left[\left(\frac{p_c}{p_a}\right)^{\frac{\gamma-1}{\gamma}}-1\right]}`,explanation:[
+          String.raw`\(p_c\) is the chamber’s total (stagnation) pressure, approximately its ordinary pressure when the gas there moves slowly. \(\gamma\) (gamma) is the gas’s heat-capacity ratio, describing how it stores thermal energy. With positive ambient pressure \(p_a\), this gives the exit Mach number \(M_e\) needed for a pressure match. The widening rocket nozzle uses the supersonic solution, \(M_e>1\).`,
+        ]},
+        {heading:'2. Turn that Mach number into an area',expression:String.raw`\frac{A_{\mathrm{exit}}}{A_{\mathrm{throat}}} = \frac{1}{M_e}\left[\frac{2}{\gamma+1}\left(1+\frac{\gamma-1}{2}M_e^2\right)\right]^{\frac{\gamma+1}{2(\gamma-1)}}`,explanation:[
+          String.raw`The left side is the expansion ratio: exit area divided by throat area. Multiply the calculated ratio by \(A_{\mathrm{throat}}\) to get \(A_{\mathrm{exit}}\). This is the calculation behind Auto for air, within the lab’s allowed area range. It cannot be used with zero ambient pressure; Auto for vacuum instead selects the model’s largest allowed ratio.`,
+        ]},
+      ]}}},
     ], related: ['cannons', 'solar-system', 'earth'], sources: [
       ['NASA · A brief history of rockets','https://www.grc.nasa.gov/www/k-12/TRC/Rockets/history_of_rockets.html'],
       ['NASA · Robert Goddard and the 1926 flight','https://science.nasa.gov/earth/earth-observatory/robert-goddard/'],
@@ -448,6 +503,7 @@ export const ARTICLES: Article[] = [
       ['NASA · Specific impulse','https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/specific-impulse/'],
       ['NASA · The ideal rocket equation','https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/ideal-rocket-equation/'],
       ['NASA · Nozzle design','https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/nozzle-design/'],
+      ['NASA · Isentropic flow and the area–Mach relationship','https://www.grc.nasa.gov/www/k-12/airplane/isentrop.html'],
     ],
   },
 ];
@@ -473,9 +529,20 @@ export function articleNeighbours(id: string) {
 export function searchArticles(query: string) {
   const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
   return ARTICLES.filter(a => {
-    const text = [a.title, a.kind, a.description, ...a.levels.flatMap(l => [l.heading, ...l.paragraphs, l.takeaway])].join(' ').toLocaleLowerCase();
+    const text = [a.title, a.kind, a.description, ...a.levels.map(readingText)].join(' ').toLocaleLowerCase();
     return terms.every(term => text.includes(term));
   });
+}
+
+/** Include equation explanations in topic search, without depending on the renderer. */
+export function readingText(reading: Reading): string {
+  const equationText = (block: EquationBlock) => [block.label, block.intro,
+    ...block.steps.flatMap(step => [step.heading, step.expression, ...step.explanation]),
+    block.details?.summary, block.details?.intro,
+    ...(block.details?.steps.flatMap(step => [step.heading, step.expression, ...step.explanation]) || []),
+  ].filter(Boolean).join(' ');
+  return [reading.heading, ...reading.paragraphs.map(p => typeof p === 'string' ? p : equationText(p)),
+    reading.equation ? equationText(reading.equation) : '', reading.takeaway].join(' ');
 }
 
 export function parseWikiHash(hash: string): { id: string; level: Level } | null {

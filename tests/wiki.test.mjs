@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ARTICLES, LEVELS, MOON_FAMILIES, articleNeighbours, getArticle, parseWikiHash, searchArticles } from '../src/wiki/content.ts';
+import { ARTICLES, LEVELS, MOON_FAMILIES, articleNeighbours, getArticle, parseWikiHash, searchArticles, readingText } from '../src/wiki/content.ts';
 import { MAP_BODIES, MAP_LAYOUTS, labelBox, solarOrbitRadius, moonOrbit, mapDestination, beltParticles, solarPlate } from '../src/wiki/solar-map.ts';
 
 test('every atlas topic has three substantial, distinct explanations and valid connections', () => {
@@ -8,9 +8,10 @@ test('every atlas topic has three substantial, distinct explanations and valid c
   assert.equal(LEVELS.length, 3);
   for (const article of ARTICLES) {
     assert.equal(article.levels.length, 3, article.id);
-    assert.equal(new Set(article.levels.map(l => l.paragraphs.join(' '))).size, 3, article.id);
+    assert.equal(new Set(article.levels.map(readingText)).size, 3, article.id);
     for (const reading of article.levels) {
-      assert.ok(reading.paragraphs.length >= 2 && reading.paragraphs.every(p => p.trim().length > 0), `${article.id}: no missing explanations`);
+      const prose = reading.paragraphs.filter(p => typeof p === 'string');
+      assert.ok(prose.length >= 2 && prose.every(p => p.trim().length > 0), `${article.id}: no missing explanations`);
       assert.ok(reading.heading && reading.takeaway);
     }
     for (const id of article.related) assert.ok(getArticle(id), `${article.id} has no broken related links`);

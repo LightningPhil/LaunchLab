@@ -1,4 +1,6 @@
+import 'katex/dist/katex.min.css';
 import './wiki.css';
+import { renderReading } from './reading.ts';
 import { ARTICLES, LEVELS, articleNeighbours, getArticle, parseWikiHash, searchArticles, type Level, type Article } from './content.ts';
 import { solarPlate, asteroidPlate, kuiperPlate, moonExplorer } from './diagrams.ts';
 import { WORLD_ART } from '../world-art.ts';
@@ -66,8 +68,7 @@ export function installWiki(onVisibilityChange: (open: boolean) => void) {
       <div class="atlas-levels" role="group" aria-label="Choose an explanation level">${LEVELS.map((l, i) => `<button type="button" data-level="${i}" aria-pressed="${level === i}" aria-controls="atlas-reading-content"><span class="atlas-level-number" aria-hidden="true">${i + 1}</span><span><span class="atlas-level-caption">Level ${i + 1}${level === i ? ' · Selected ✓' : ''}</span><strong>${l.name}</strong><small>${l.detail}</small></span></button>`).join('')}</div></section>`;
   }
   function readingMarkup() {
-    const reading = article.levels[level];
-    return `<section class="atlas-prose" aria-labelledby="atlas-reading-heading"><h2 id="atlas-reading-heading">${reading.heading}</h2>${reading.paragraphs.map(p => `<p>${p}</p>`).join('')}${reading.equation ? `<div class="atlas-equation"><span>THE RELATIONSHIP</span><p>${reading.equation.expression}</p><small>${reading.equation.explanation}</small></div>` : ''}</section><aside class="atlas-takeaway"><span aria-hidden="true">✧</span><p class="atlas-kicker">ONE THING TO REMEMBER</p><p>${reading.takeaway}</p></aside>`;
+    return renderReading(article.levels[level]);
   }
   function updateReading() {
     const scroll = main.scrollTop, dialogScroll = dialog!.scrollTop;
