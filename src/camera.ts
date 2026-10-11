@@ -1,3 +1,5 @@
+import { surfacePosition } from './spherical-world.ts';
+
 export interface CannonSetupFraming {
   width: number;
   height: number;
@@ -70,11 +72,9 @@ export function rocketCameraFraming(request: RocketCameraRequest, width: number,
   const maxPPM = Math.max(1e-8, Math.min(80, (Math.min(spanX, spanY) / 2 - 7) / radiusPerMetre));
   const project = (point: RocketCameraPoint) => {
     if (!curved || request.radius <= 0) return point;
-    const angle = point.x / request.radius;
     // The difference-of-cosines form avoids subtracting planetary radii when
     // the rocket is only centimetres above its launch pad.
-    return { x: (request.radius + point.y) * Math.sin(angle),
-      y: point.y * Math.cos(angle) - 2 * request.radius * Math.sin(angle / 2) ** 2 };
+    return surfacePosition(point.x, point.y, request.radius);
   };
   const points = [{ x: request.launchX, y: 0 }, request.state, ...request.ahead].map(project);
   // Far from the surface, include the planet as context without imposing a

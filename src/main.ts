@@ -10,6 +10,7 @@ import { RocketPropellants } from './rocket_propellants.ts';
 import { RocketPhysics } from './rocket_physics.ts';
 import { NozzleRender } from './nozzle_render.ts';
 import { Renderer } from './renderer.ts';
+import { WorldViewControls } from './world-view.ts';
 import { UI } from './ui.ts';
 import { characterForWorld } from './world-characters.ts';
 import { chooseIdleLook, clearRocketWatch, rocketWatchAim } from './crew-watch.ts';
@@ -43,6 +44,7 @@ const isReadingOpen = () => isWelcomeOpen() || isWikiOpen() || isManualOpen() ||
  */
 
 let deck: FlightDeck;
+let worldViewControls: WorldViewControls;
 let flightBuild: AbortController | null = null;
 let displayedFlightState:any=null;
 let viewActive = false;
@@ -1221,6 +1223,7 @@ function fitRun(run: FlightRecord) {
   // and the camera gradually reveals altitude while keeping the launch visible.
   Renderer.setTargetZoom(run.mode === 'cannon' ? computeNeededZoom(maxRangeMetres, maxHeightMetres, margin) : Renderer.DEFAULT_PPM);
   if (run.mode === 'cannon' && run.minX < 0) Renderer.setCameraTarget(run.minX - 1);
+  if (run.mode === 'cannon') Renderer.setCannonCamera([...run.samples, ...(baseline?.samples || [])], run.config.planetRadius);
 }
 
 function showLaunchFailure(run: FlightRecord, verticalTw: number) {
@@ -1410,10 +1413,13 @@ function loop(timestamp) {
 
   // Anticipate the complete setup/rebuild envelope before smoothly easing the
   // idle camera. Recorded flights retain their existing framing policy.
-  frameCannonSetup();
+  if (Renderer.getSceneView() === 'flight') frameCannonSetup();
   // Advance the recorded vehicle first so framing uses this frame's position,
   // including seeks and accelerated playback, rather than yesterday's target.
   updateRecordedFlight(elapsed);
+  const scenePoint = viewActive && displayedFlightState ? displayedFlightState : { x: 1.5, y: 0 };
+  Renderer.setSceneFocus(scenePoint, viewActive && deck.run ? deck.run.launchX : 1.5);
+  worldViewControls.update(resolveEnvironment(currentGravity), scenePoint.y);
   if (currentMode === 'rocket') UI.updateRocketFuel(currentRocketDisplay());
   if (currentMode === 'rocket' && !viewActive && !deck.busy) {
     const values = UI.getRocketValues();
@@ -1554,7 +1560,7 @@ function loop(timestamp) {
   }
 
   // ── Nozzle cutaway inset (rocket mode only) ──
-  if (currentMode === 'rocket' && (Renderer.getWidth() > 680 || isSetupNozzleVisible())) {
+  if (currentMode === 'rocket' && Renderer.getSceneView() === 'flight' && (Renderer.getWidth() > 680 || isSetupNozzleVisible())) {
     var nzVals = UI.getRocketValues();
     var nzGravity = currentGravity;
     var nzPre = RocketPhysics.computePreLaunch(nzVals, nzGravity);
@@ -1592,13 +1598,15 @@ function loop(timestamp) {
 
   // Particles (shared across both modes)
   Renderer.drawParticles(particles);
-  Renderer.drawSceneNotes(currentMode, activeCharacter);
+  Renderer.drawWorldLocator(viewActive ? displayedFlightState : null, viewActive && deck.run ? deck.run.launchX : 1.5);
+  if (Renderer.getSceneView() === 'flight') Renderer.drawSceneNotes(currentMode, activeCharacter);
 
   requestAnimationFrame(loop);
 }
 
 // Helper: convert canvas px back to physics metres (for off-screen check)
 function toPhysX(canvasPx) {
+  if (Renderer.getSceneView() !== 'flight') return canvasPx / Renderer.DEFAULT_PPM;
   var ppm = Renderer.getCurrentPPM();
   if (ppm <= 0) return 9999;
   // cameraX is implicit in toCanvasX: canvas = (world - cameraX) * ppm
@@ -1681,6 +1689,13 @@ function boot() {
   });
 
   deck = new FlightDeck(document.querySelector('.canvas-area')!);
+  worldViewControls = new WorldViewControls(document.querySelector('.canvas-area')!, view => {
+    Renderer.setSceneView(view);
+    if (view === 'flight') {
+      if (viewActive && deck.run) fitRun(deck.run);
+      else { Renderer.resetCamera(); Renderer.resetZoom(); }
+    }
+  }, show => Renderer.setGravityField(show));
   deck.onSeek = () => {
     if (!deck.run) return;
     if (!viewActive) restoreRun();

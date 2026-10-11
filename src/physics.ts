@@ -1,4 +1,5 @@
 import { classifyTrajectory } from './environment.ts';
+import { radialGravity } from './spherical-world.ts';
 
 /**
  * ============================================================================
@@ -134,22 +135,16 @@ function advanceProjectile(state, dt, gravity) {
 
   if (R > 0) {
     // ── Radial gravity integration (world-space) ──
-    // mu = g_surface * R^2  (gravitational parameter)
-    var mu = gravity * R * R;
 
     var wx = state.wx;
     var wy = state.wy;
     var wvx = state.wvx;
     var wvy = state.wvy;
 
-    // Distance from planet centre
-    var r = Math.sqrt(wx * wx + wy * wy);
-    if (r < 1) r = 1; // safety
-
     // Gravitational acceleration: a = -mu / r^2, directed toward origin
-    var aFactor = -mu / (r * r * r); // divides by r^3 to also normalise direction
-    var ax = aFactor * wx;
-    var ay = aFactor * wy;
+    var acceleration = radialGravity(wx, wy, R, gravity);
+    var ax = acceleration.x;
+    var ay = acceleration.y;
 
     // Velocity Verlet integration (second-order accurate)
     // Half-step velocity
@@ -163,9 +158,9 @@ function advanceProjectile(state, dt, gravity) {
     // Recompute acceleration at new position
     var nr = Math.sqrt(nwx * nwx + nwy * nwy);
     if (nr < 1) nr = 1;
-    var naFactor = -mu / (nr * nr * nr);
-    var nax = naFactor * nwx;
-    var nay = naFactor * nwy;
+    var nextAcceleration = radialGravity(nwx, nwy, R, gravity);
+    var nax = nextAcceleration.x;
+    var nay = nextAcceleration.y;
 
     // Full-step velocity
     var nvx = hvx + nax * dt * 0.5;

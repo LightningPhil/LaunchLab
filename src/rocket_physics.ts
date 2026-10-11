@@ -1,6 +1,7 @@
 import { RocketPropellants } from './rocket_propellants.ts';
 import { classifyTrajectory, pressureAtAltitude, resolveEnvironment } from './environment.ts';
 import type { Environment } from './environment.ts';
+import { radialGravity } from './spherical-world.ts';
 
 /** Pure spherical/flat rocket model. Rendering time never enters this solver.
  * Each powered segment integrates F/m with the logarithmic rocket equation;
@@ -135,10 +136,10 @@ function frame(state, gravity) {
   if (!(radius > 0)) return { px: state.x, py: state.y, vx: state.vx, vy: state.vy,
     tx: 1, ty: 0, rx: 0, ry: 1, gx: 0, gy: -gravity };
   const r = Math.max(1, Math.hypot(state.wx, state.wy));
-  const factor = -gravity * radius * radius / (r * r * r);
+  const acceleration = radialGravity(state.wx, state.wy, radius, gravity);
   return { px: state.wx, py: state.wy, vx: state.wvx, vy: state.wvy,
     tx: state.wy / r, ty: -state.wx / r, rx: state.wx / r, ry: state.wy / r,
-    gx: factor * state.wx, gy: factor * state.wy };
+    gx: acceleration.x, gy: acceleration.y };
 }
 function setKinematics(state, px, py, vx, vy) {
   if (!(state.planetRadius > 0)) {

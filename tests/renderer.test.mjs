@@ -40,6 +40,7 @@ function harness() {
   };
   const canvas = { width: 0, height: 0, getContext: () => context, getBoundingClientRect: () => bounds };
   Renderer.init(canvas);
+  Renderer.setSceneView('flight'); Renderer.setGravityField(false);
   Renderer.resetCamera(); Renderer.setZoomImmediate(80); Renderer.updateWorld(0);
   calls.length = 0;
   return { canvas, context, bounds, calls, resizeLayout: () => resized() };
@@ -87,6 +88,52 @@ test('cannon muzzle follows the full barrel-length range used by launch physics'
     }
   }
   Renderer.setBarrelLength(2);
+});
+
+test('world views use the selected physical radius immediately and locate contact on the same circle', () => {
+  const h = harness();
+  for (const environment of ENVIRONMENTS) {
+    Renderer.setTargetGravity(environment.gravity);
+    for (const mode of ['world', 'horizon']) {
+      Renderer.setSceneView(mode);
+      Renderer.setSceneFocus({ x: environment.radius * .6, y: environment.radius * .05 }, 0);
+      Renderer.updateWorld(0);
+      const centre = Renderer.toCanvas(0, -environment.radius);
+      const radius = environment.radius * Renderer.getCurrentPPM();
+      for (const angle of [0, .4, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+        const point = Renderer.toCanvas(environment.radius * angle, 0);
+        assert.ok(Math.abs(Math.hypot(point.x - centre.x, point.y - centre.y) - radius) < 1e-8);
+        const altitude = Renderer.screenToSurface(point.x, point.y).y;
+        assert.ok(Math.abs(altitude) < environment.radius * 1e-14);
+      }
+      Renderer.setGravityField(true);
+      Renderer.updateWorld(0); Renderer.clear(); Renderer.drawWorld();
+      Renderer.drawWorldLocator({ x: environment.radius * .6, y: environment.radius * .05 }, 0);
+      assert.ok(h.calls.some(call => call.name === 'fillText' && call.args[0].includes('centre')));
+    }
+  }
+  Renderer.setTargetGravity(9.81); Renderer.setSceneView('flight'); Renderer.setGravityField(false);
+});
+
+test('long cannon framing keeps the curved landing and launch visible on phones and desktop', () => {
+  const h = harness(), radius = 1188300;
+  Renderer.setTargetGravity(.62);
+  const path = Array.from({ length: 101 }, (_, index) => {
+    const fraction = index / 100;
+    return { x: radius * .7 * fraction, y: radius * .2 * 4 * fraction * (1 - fraction) };
+  });
+  for (const [width, height] of [[960, 540], [320, 260], [640, 180]]) {
+    h.bounds.width = width; h.bounds.height = height; h.resizeLayout();
+    Renderer.resetCamera(); Renderer.setCannonCamera(path, radius);
+    Renderer.setSceneFocus(path.at(-1), 0);
+    Renderer.updateWorld(30); Renderer.updateWorld(30);
+    for (const point of path) {
+      const pixel = Renderer.toCanvas(point.x, point.y);
+      assert.ok(pixel.x >= 0 && pixel.x <= width && pixel.y >= 0 && pixel.y <= height,
+        `${width}×${height}: ${pixel.x}, ${pixel.y}`);
+    }
+  }
+  Renderer.resetCamera(); Renderer.setTargetGravity(9.81);
 });
 
 test('rocket points along commanded thrust and plume begins behind its nozzle', () => {
