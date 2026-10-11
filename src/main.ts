@@ -20,8 +20,9 @@ import { beginSquidBreakout, headForSquidHole, enterSquidHole, releaseSquidTarge
 import { installWiki, isWikiOpen } from './wiki/wiki.ts';
 import { installManual, isManualOpen } from './manual.ts';
 import { installResponsiveLayout, drawSetupNozzle, isSetupNozzleVisible } from './responsive-layout.ts';
+import { installWelcome, isWelcomeOpen } from './welcome.ts';
 
-const isReadingOpen = () => isWikiOpen() || isManualOpen() || document.body.classList.contains('orrery-open');
+const isReadingOpen = () => isWelcomeOpen() || isWikiOpen() || isManualOpen() || document.body.classList.contains('orrery-open');
 
 /**
  * ============================================================================
@@ -1708,6 +1709,7 @@ function boot() {
     Renderer.resize();
     if (viewActive && deck.run) fitRun(deck.run);
   });
+  window.addEventListener('displaychange', () => Renderer.resize());
   new ResizeObserver(() => {
     if (viewActive && deck.run?.mode === 'cannon') fitRun(deck.run);
   }).observe(canvas);
@@ -1751,6 +1753,7 @@ function boot() {
     }
   });
   installResponsiveLayout();
+  installWelcome(pauseForReading);
   requestAnimationFrame(loop);
 }
 

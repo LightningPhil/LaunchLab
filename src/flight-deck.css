@@ -31,6 +31,7 @@
 .open-wiki svg circle:first-child { fill:#cfa667; stroke:#b88c51; }
 .open-wiki svg circle:last-child { fill:#648574; stroke:#f6f7ea; }
 .open-wiki .wiki-arrow { color:#6e8b70; font-size:17px; }
+.wiki-label-short { display:none; }
 .flight-deck .open-wiki:hover { background:#dde9d6; border-color:#8ba987; box-shadow:0 2px 0 #c7d6bf; }
 .flight-deck .open-orrery { display:flex; align-items:center; gap:7px; min-height:42px; padding:6px 13px; background:#f8f0dc; border-color:#d8c49a; color:#685437; border-radius:12px; font-size:13px; box-shadow:0 2px 0 #e8ddc4; }
 .flight-deck .open-orrery:hover { background:#f3e7c9; border-color:#bda574; }
@@ -66,7 +67,7 @@
 .engine-state { margin:8px 0 5px; font:600 11px/1.4 system-ui,sans-serif; color:#53705d; }
 @container (max-width:750px) {
   .rate-choice { font-size:0; gap:0; }
-  .chronograph { flex-basis:38px; width:38px; }
+  .chronograph { display:none; }
   .clock-readings { display:grid; gap:2px; }
   #flight-time { font-size:21px; }
   .flight-timeline { grid-template-columns:minmax(50px,1fr) auto; }
@@ -87,7 +88,7 @@
   .flight-controls { flex:1; }
   .flight-timeline { flex-basis:100%; }
 }
-@container (max-width:430px) {
+@container (max-width:550px) {
   .flight-topline { grid-template-columns:minmax(0,1fr) auto; gap:8px; }
   .flight-utilities { grid-column:2; grid-row:1; }
   .flight-exploration { grid-column:1/-1; grid-row:2; width:100%; max-width:none; }
@@ -97,7 +98,13 @@
   .flight-deck .eyebrow { font-size:7px; }
   #flight-time { font-size:20px; }
 }
-@media (max-width:950px) {
+@container (min-width:551px) and (max-width:750px) {
+  .flight-topline { grid-template-columns:minmax(80px,1fr) auto auto; gap:10px; }
+  .wiki-label-full,.open-wiki .wiki-arrow { display:none; }
+  .wiki-label-short { display:inline; }
+  .flight-exploration { max-width:none; }
+}
+@media (max-width:1180px), (max-height:620px) and (max-width:1600px) {
   .flight-deck { padding-top:calc(8px + env(safe-area-inset-top)); padding-left:max(12px, env(safe-area-inset-left)); padding-right:max(12px, env(safe-area-inset-right)); }
   .flight-deck button,.flight-deck select,.flight-settings summary { min-height:44px; }
   .flight-settings summary,.flight-deck .flight-icon-button { width:44px; flex-basis:44px; }
@@ -111,7 +118,7 @@
   .view-options label { min-height:36px; }
   #flight-timeline { margin-block:16px; }
 }
-@media (max-width:950px) and (max-height:500px) and (min-width:480px) {
+@media (max-width:1600px) and (max-height:500px) and (min-width:480px) {
   .flight-playback { flex-wrap:nowrap; gap:8px; }
   .flight-controls { flex:0 0 auto; }
   .flight-timeline { flex-basis:auto; }

@@ -57,6 +57,13 @@ export function moonOrbitRadius(world:World,t:number):number {
   const parent=WORLDS.find(w=>w.id===world.satellite!.parent)!;
   return mix(world.satellite!.distanceKm/AU_KM,parent.displayDiameter/2+.26+world.displayDiameter/2,t);
 }
+/** Moon translation uses its orbital period, independently of surface spin. */
+export function satelliteOffset(world:World,ms:number,t:number):[number,number,number] {
+  const orbit=world.satellite!;
+  const phase=((daysSinceJ2000(ms)/orbit.periodDays)%1)*TAU+orbit.phase;
+  const radius=moonOrbitRadius(world,t),inc=orbit.inclination*Math.PI/180;
+  return [Math.cos(phase)*radius*Math.cos(inc),Math.cos(phase)*radius*Math.sin(inc),-Math.sin(phase)*radius];
+}
 export const BELTS = [
   { id:'asteroids', name:'Asteroid belt', inner:2.1, outer:3.3, halfWidth:.45, colour:'#ae9b7d', count:4200 },
   { id:'kuiper', name:'Kuiper belt', inner:30, outer:50, halfWidth:.85, colour:'#708fae', count:7600 },

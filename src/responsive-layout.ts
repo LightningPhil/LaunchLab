@@ -1,5 +1,6 @@
 import './responsive-layout.css';
 import { NozzleRender } from './nozzle_render.ts';
+import { COMPACT_LAYOUT_QUERY, observeDisplay } from './display-layout.ts';
 
 let setupNozzle: HTMLCanvasElement;
 
@@ -22,7 +23,7 @@ export const isSetupNozzleVisible = () => !!setupNozzle?.offsetWidth && setupNoz
 /** Move the existing controls, keeping their state and event handlers intact.
  * The setup sheet is a disclosure; closing it never pauses or resets a flight. */
 export function installResponsiveLayout() {
-  const compact = matchMedia('(max-width: 950px)');
+  const compact = matchMedia(COMPACT_LAYOUT_QUERY);
   const panel = document.querySelector<HTMLElement>('.control-panel')!;
   const controls = panel.querySelector<HTMLElement>('.controls-scroll')!;
   const actions = panel.querySelector<HTMLElement>('.launch-actions')!;
@@ -94,6 +95,7 @@ export function installResponsiveLayout() {
     if (open && !panel.contains(target) && !target.closest('dialog[open], #tooltip')) setOpen(false);
   });
   compact.addEventListener('change', syncLayout);
+  observeDisplay();
   // Launch errors can make the dock taller. Keep the sheet's Done button and
   // first controls on screen even in a short landscape viewport.
   const measureDock = () => panel.style.setProperty('--launcher-height', `${panel.offsetHeight}px`);

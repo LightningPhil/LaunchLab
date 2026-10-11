@@ -42,7 +42,7 @@ export class FlightDeck {
       <line id="clock-hand" x1="50" y1="56" x2="50" y2="16"/><circle class="clock-pin" cx="50" cy="50" r="3"/>
       </svg></div><div class="clock-heading"><span class="eyebrow">FLIGHT TIME</span>
       <div class="clock-readings"><output id="flight-time" aria-label="Flight time">00:00.0</output><output id="flight-rate">Auto · 1.0×</output></div></div></div>
-      <div class="flight-exploration"><button type="button" id="open-wiki" class="open-wiki" aria-haspopup="dialog" aria-controls="educational-wiki"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="4"/><ellipse cx="16" cy="16" rx="14" ry="7" transform="rotate(-35 16 16)"/><circle cx="27" cy="8" r="2.5"/></svg><span>Explore the Solar System</span><span class="wiki-arrow" aria-hidden="true">↗</span></button>
+      <div class="flight-exploration"><button type="button" id="open-wiki" class="open-wiki" aria-label="Explore the Solar System" aria-haspopup="dialog" aria-controls="educational-wiki"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="4"/><ellipse cx="16" cy="16" rx="14" ry="7" transform="rotate(-35 16 16)"/><circle cx="27" cy="8" r="2.5"/></svg><span class="wiki-label-full">Explore the Solar System</span><span class="wiki-label-short" aria-hidden="true">Solar System</span><span class="wiki-arrow" aria-hidden="true">↗</span></button>
       <button type="button" id="open-orrery" class="open-orrery" aria-haspopup="dialog" aria-controls="solar-orrery"><span class="orrery-button-icon" aria-hidden="true">◎</span><span>Orrery</span></button></div>
       <div class="flight-utilities">
       <label class="rate-choice">Time <select id="flight-speed" aria-label="Time speed"><option value="auto">Auto</option>

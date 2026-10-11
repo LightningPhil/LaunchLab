@@ -4,6 +4,10 @@ A playful physics field station. Launch a cannonball or rocket, watch what happe
 
 Designed for education on phones, tablets, laptops and desktops. Smaller screens keep the field visible above a compact launcher bar; **Setup** opens the scrollable experiment controls and **Done** returns to the field. Launching also closes Setup. Rotate the device at any time without losing settings or the recorded flight; wider screens retain the notebook sidebar. The rocket's **Nozzle Sketch** is also available inside compact Setup.
 
+A playful welcome explains the launch experiments and their scope: see how far or high a cannonball or rocket travels; reaching orbit is not the aim of these launchers. **Don’t show this next time** remembers your choice in this browser when storage is available. **Settings → Welcome to Launch Lab** reopens it and lets you change that choice. The welcome and manual distinguish the launch field from the **Orrery**, where worlds move in orbit. The welcome uses three instruction columns on wider screens and one on small screens; its text scrolls independently so the checkbox and launch button remain accessible on phones and short landscape tablets.
+
+The interface measures available CSS space, which already reflects Windows display scaling and browser zoom. Compact controls activate at 1180 CSS pixels or below, and on shorter windows up to 1600 pixels wide. Text and touch targets keep their readable size. Rotation, page zoom and monitor density changes update the layout and canvas resolution. In compact orrery views, **Date & display scale** expands the extra controls; world labels retain their side, and moon labels sit outside their parent’s moon system with moving leaders.
+
 ## Try it
 
 The commands below are for the owner and anyone separately authorised to develop or run a local copy. Public use under the current licence is through the authorised hosted service.

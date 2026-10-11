@@ -8,7 +8,9 @@ export const MANUAL_TOPICS = [
       <li><strong>Choose your world.</strong><p>Select a planet, moon or the Sun from the illustrated buttons. The gravity changes with it. The facts button beside the world’s name opens a short introduction.</p></li>
       <li><strong>Let it fly.</strong><p>The launch buttons sit below the world picker on wide screens, or stay in the bottom launcher bar on smaller screens. Use <b>Let it fly</b> for the cannon or <b>Lift off</b> for the rocket. Launching closes compact Setup so you can watch the field. Open Setup again for measurements, then use <b>Reset</b> to change a setting and try again.</p></li>
     </ol>
+    <aside class="manual-note"><strong>How far? How high?</strong><p>Launch Lab lets you compare cannon shots and rocket flights. You can’t reach orbit with these launchers in this simulator. For worlds moving in orbit, open the <b>Orrery</b>.</p></aside>
     <aside class="manual-note"><strong>A useful first experiment</strong><p>Keep the launcher settings the same and try two different worlds. Make a prediction before the second launch.</p></aside>
+    <p>The welcome screen explains the lab when you first arrive. Tick <b>Don’t show this next time</b> to skip it on future launches in this browser. Open <b>Welcome to Launch Lab</b> in Settings to read it again or change that choice.</p>
     <p>The book beside Settings brings you back to this manual. Opening it pauses the scene; use <b>Resume</b> when you return to a flight.</p>`,
   },
   {

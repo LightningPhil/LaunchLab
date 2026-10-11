@@ -1,13 +1,15 @@
 import './orrery.css';
 import * as THREE from 'three';
 import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
-import { WORLDS, MOONS, moonOrbitRadius, BELTS, NORMAL_RADII, DAY_MS, YEAR_DAYS, MIN_DATE, MAX_DATE, TAU, mix, seeded,
+import { WORLDS, MOONS, moonOrbitRadius, satelliteOffset, BELTS, NORMAL_RADII, DAY_MS, YEAR_DAYS, MIN_DATE, MAX_DATE, TAU, mix, seeded,
   elementsAt, positionFromElements, positionAt, displayPosition, diameterAt, spinAt, outerRadius,
   daysSinceJ2000, advanceTime, type World } from './orrery-model.ts';
 import { PlanetSurface, haloTexture, ringTexture } from './orrery-textures.ts';
 import { TouchPan, panOrthographic } from './orrery-navigation.ts';
+import { placeLabel, easeLabel, type LabelRect, type LabelPlacement } from './orrery-labels.ts';
+import { COMPACT_LAYOUT_QUERY } from './display-layout.ts';
 
-const ALL_WORLDS=[...WORLDS,...MOONS];
+const ALL_WORLDS=WORLDS.flatMap(world=>[world,...MOONS.filter(moon=>moon.satellite!.parent===world.id)]);
 
 let activeDialog:HTMLDialogElement|undefined;
 export const isOrreryOpen=()=>!!activeDialog?.open;
@@ -32,8 +34,8 @@ export function installOrrery(onOpen:()=>void) {
       <div class="orrery-transport"><div class="orrery-time"><p class="orrery-kicker">SIMULATION TIME <span id="orrery-zone"></span></p><div><output id="orrery-live-date"></output><output id="orrery-live-time"></output></div></div>
       <div class="orrery-playback"><button type="button" id="orrery-play" class="orrery-primary">Ⅱ Pause</button><button type="button" id="orrery-direction" title="Reverse time" aria-pressed="false">Forward →</button><label class="orrery-speed-label">Speed<select id="orrery-speed" aria-label="Simulation speed"><option value="real">Real time</option><option value="0.002737850787">1 day / minute</option><option value="week" selected>1 week / minute</option><option value="0.083333333333">1 month / minute</option><option value="1">1 year / minute</option><option value="10">10 years / minute</option><option value="100">100 years / minute</option></select></label></div>
       <label class="orrery-inspect-label">Explore<select id="orrery-inspect" aria-label="Inspect a world"><option value="">Choose a world…</option>${ALL_WORLDS.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}${BELTS.map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</select></label></div>
-      <div class="orrery-adjustments"><form class="orrery-date-form"><label for="orrery-date">Go to date & time <small>(local)</small></label><div><input type="datetime-local" step="1" id="orrery-date" required aria-describedby="orrery-date-note"><button type="submit" title="Jump to the selected date and pause">Set date</button><button type="button" id="orrery-now">Now</button></div><span id="orrery-date-note">Supported dates: 1000–3000</span></form>
-      <div class="orrery-scale-control"><div><label for="orrery-scale">Distance & size</label><output for="orrery-scale" id="orrery-scale-value">Even spacing</output></div><input id="orrery-scale" type="range" min="0" max="100" value="100" step="1" aria-label="Solar system distance and planet size scale"><div class="orrery-scale-ends"><button type="button" data-scale="0">True scale</button><span>Same orbital clock. A different perspective.</span><button type="button" data-scale="100">Even spacing</button></div></div></div>
+      <details class="orrery-adjustment-panel" open><summary>Date & display scale <span aria-hidden="true">⌄</span></summary><div class="orrery-adjustments"><form class="orrery-date-form"><label for="orrery-date">Go to date & time <small>(local)</small></label><div><input type="datetime-local" step="1" id="orrery-date" required aria-describedby="orrery-date-note"><button type="submit" title="Jump to the selected date and pause">Set date</button><button type="button" id="orrery-now">Now</button></div><span id="orrery-date-note">Supported dates: 1000–3000</span></form>
+      <div class="orrery-scale-control"><div><label for="orrery-scale">Distance & size</label><output for="orrery-scale" id="orrery-scale-value">Even spacing</output></div><input id="orrery-scale" type="range" min="0" max="100" value="100" step="1" aria-label="Solar system distance and planet size scale"><div class="orrery-scale-ends"><button type="button" data-scale="0">True scale</button><span>Same orbital clock. A different perspective.</span><button type="button" data-scale="100">Even spacing</button></div></div></div></details>
       <div class="orrery-bottom"><p id="orrery-status" role="status">Running · 1 week / minute</p><details class="orrery-model-note"><summary>About the model</summary><div><strong>A date-driven Keplerian orrery</strong><p>Elliptical, inclined orbits use <a href="https://ssd.jpl.nasa.gov/planets/approx_pos.html" target="_blank" rel="noreferrer">JPL approximate orbital elements</a> for 1000–3000. Earth represents the Earth–Moon barycentre; Pluto uses the original JPL elements. UTC approximates dynamical time.</p><p>Even spacing preserves orbital angles and timing, while circularising distances into separated lanes. Sizes are enlarged: Sun 3× Earth; Jupiter 2×. Saturn’s rings and moon systems count towards the clear gaps.</p><p>Surface spins use <a href="https://nssdc.gsfc.nasa.gov/planetary/factsheet/" target="_blank" rel="noreferrer">NASA rotation periods</a> and axial tilts; texture meridians and axial longitudes are illustrative. Belt particles are representative circular Kepler orbits, not individual tracked asteroids. The Moon, Ganymede and Charon use representative circular orbits with measured mean distances and periods; their phases and planes are illustrative. Surface maps are original illustrations, not measured cartography. Ambient studio lighting keeps every world visible.</p></div></details></div>
     </footer>`;
   document.body.append(dialog);
@@ -110,6 +112,9 @@ export function installOrrery(onOpen:()=>void) {
   const labelCanvas=$<HTMLCanvasElement>('.orrery-leaders'), ink=labelCanvas.getContext('2d')!;
   const slider=$<HTMLInputElement>('#orrery-scale'),labelToggle=$<HTMLInputElement>('#orrery-label-toggle'),orbitToggle=$<HTMLInputElement>('#orrery-orbit-toggle');
   const dateInput=$<HTMLInputElement>('#orrery-date'),play=$<HTMLButtonElement>('#orrery-play'),status=$<HTMLElement>('#orrery-status');
+  const compactLayout=matchMedia(COMPACT_LAYOUT_QUERY),adjustments=$<HTMLDetailsElement>('.orrery-adjustment-panel');
+  const syncAdjustments=()=>{adjustments.open=!compactLayout.matches;};
+  compactLayout.addEventListener('change',syncAdjustments);syncAdjustments();
   dateInput.min=localInput(MIN_DATE);dateInput.max=localInput(MAX_DATE);
   const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
   $('#orrery-zone').textContent=` / ${timezone.replace(/_/g,' ')}`;
@@ -206,8 +211,8 @@ export function installOrrery(onOpen:()=>void) {
       const satellite=p.world.satellite;
       if(satellite){
         const parent=planets.find(parent=>parent.world.id===satellite.parent)!;
-        const phase=spinAt(p.world,simulation)+satellite.phase,radius=moonOrbitRadius(p.world,amount),inc=satellite.inclination*Math.PI/180;
-        p.root.position.set(Math.cos(phase)*radius*Math.cos(inc),Math.cos(phase)*radius*Math.sin(inc),-Math.sin(phase)*radius).add(parent.root.position);
+        const radius=moonOrbitRadius(p.world,amount);
+        p.root.position.set(...satelliteOffset(p.world,simulation,amount)).add(parent.root.position);
         p.orbit!.position.copy(parent.root.position);p.orbit!.scale.setScalar(radius);
       }else{p.real=positionAt(p.world,simulation);p.root.position.set(...displayPosition(p.real,p.world.id,amount));}
       const diameter=diameterAt(p.world,amount);p.root.scale.setScalar(diameter);p.mesh.rotation.y=spinAt(p.world,simulation);
@@ -233,25 +238,40 @@ export function installOrrery(onOpen:()=>void) {
       camera.position.add(focus.root.position.clone().sub(controls.target));controls.target.copy(focus.root.position);
     }
   }
-  type Rect={x:number;y:number;w:number;h:number};
-  const overlaps=(a:Rect,b:Rect)=>a.x<b.x+b.w+4&&a.x+a.w+4>b.x&&a.y<b.y+b.h+3&&a.y+a.h+3>b.y;
-  function updateLabels(){
+  const placements=new Map<string,LabelPlacement>(), drawnLabels=new Map<string,LabelRect>();
+  function updateLabels(seconds:number){
     ink.clearRect(0,0,width,height);if(!labelsVisible)return;
     const pxPerUnit=height/(camera.top-camera.bottom)*camera.zoom;
     const projected=targets.map(target=>{const p=target.position.clone().project(camera);return {target,x:(p.x+1)*width/2,y:(1-p.y)*height/2,z:p.z,r:target.radius*pxPerUnit};});
-    const occupied:Rect[]=[{x:12,y:12,w:450,h:40},{x:0,y:height-35,w:width,h:35}];
+    const tools=$<HTMLElement>('.orrery-view-tools');
+    const occupied:LabelRect[]=[{x:tools.offsetLeft,y:tools.offsetTop,w:tools.offsetWidth,h:tools.offsetHeight},{x:0,y:height-35,w:width,h:35}];
     const pane=$<HTMLElement>('.orrery-info');if(!pane.hidden)occupied.push({x:pane.offsetLeft,y:pane.offsetTop,w:pane.offsetWidth,h:pane.offsetHeight});
     const bodyRects=projected.filter(p=>p.r>3).map(p=>({x:p.x-p.r,y:p.y-p.r,w:p.r*2,h:p.r*2}));
-    projected.sort((a,b)=>Number(b.target.id===selected)-Number(a.target.id===selected)||b.r-a.r);
+    // Preserve priority as apparent radii change; a moving world must not
+    // continuously steal another label's slot.
+    projected.sort((a,b)=>Number(b.target.id===selected)-Number(a.target.id===selected));
+    ink.font="11px 'Segoe UI',system-ui,sans-serif";
     for(const p of projected){
-      const label=p.target.label;label.hidden=true;
-      if(p.z< -1||p.z>1||p.x<0||p.x>width||p.y<0||p.y>height)continue;
-      const w=p.target.name.length*6.6+18,h=23,gap=p.r+9;
-      const candidates:Rect[]=[];
-      for(const pad of [0,17,35])candidates.push({x:p.x+gap+pad,y:p.y-h/2,w,h},{x:p.x-w/2,y:p.y-gap-h-pad,w,h},{x:p.x-gap-w-pad,y:p.y-h/2,w,h},{x:p.x-w/2,y:p.y+gap+pad,w,h});
-      const rect=candidates.find(r=>r.x>=10&&r.y>=10&&r.x+r.w<=width-10&&r.y+r.h<=height-12&&!occupied.some(o=>overlaps(r,o))&&!bodyRects.some(o=>overlaps(r,o)));
-      if(!rect)continue;
-      occupied.push(rect);label.hidden=false;label.style.transform=`translate(${Math.round(rect.x)}px,${Math.round(rect.y)}px)`;
+      const label=p.target.label;
+      if(p.z< -1||p.z>1||p.x<0||p.x>width||p.y<0||p.y>height){label.hidden=true;drawnLabels.delete(p.target.id);continue;}
+      const w=Math.ceil(ink.measureText(p.target.name).width)+27,h=23;
+      let anchorX=p.x,anchorY=p.y,gap=p.r+9;
+      const world=MOONS.find(m=>m.id===p.target.id);
+      if(world && following!==world.id){
+        const parent=projected.find(candidate=>candidate.target.id===world.satellite!.parent)!;
+        // Reserve the entire moon system. Ganymede's name stays beside Jupiter
+        // while its leader follows the moon, even at conjunction.
+        anchorX=parent.x;anchorY=parent.y;
+        gap=Math.max(parent.r,moonOrbitRadius(world,amount)*pxPerUnit+p.r)+9;
+      }
+      const candidates:LabelRect[]=[];
+      for(const pad of [0,17,35,60,90])candidates.push({x:anchorX+gap+pad,y:anchorY-h/2,w,h},{x:anchorX-w/2,y:anchorY-gap-h-pad,w,h},{x:anchorX-gap-w-pad,y:anchorY-h/2,w,h},{x:anchorX-w/2,y:anchorY+gap+pad,w,h});
+      const placement=placeLabel(candidates,[...occupied,...bodyRects],width,height,placements.get(p.target.id));
+      if(!placement){label.hidden=true;drawnLabels.delete(p.target.id);continue;}
+      placements.set(p.target.id,placement);
+      const rect=easeLabel(drawnLabels.get(p.target.id),placement.rect,seconds);
+      drawnLabels.set(p.target.id,rect);
+      occupied.push(placement.rect,rect);label.hidden=false;label.style.transform=`translate(${rect.x.toFixed(2)}px,${rect.y.toFixed(2)}px)`;
       const endX=Math.max(rect.x,Math.min(p.x,rect.x+rect.w)),endY=Math.max(rect.y,Math.min(p.y,rect.y+rect.h));
       const dx=endX-p.x,dy=endY-p.y,length=Math.hypot(dx,dy)||1;
       ink.strokeStyle=p.target.id===selected?'#eac58aaa':'#7e91a44a';ink.lineWidth=1;ink.beginPath();ink.moveTo(p.x+dx/length*(p.r+3),p.y+dy/length*(p.r+3));ink.lineTo(endX,endY);ink.stroke();
@@ -262,7 +282,8 @@ export function installOrrery(onOpen:()=>void) {
     width=Math.max(1,mount.clientWidth);height=Math.max(1,mount.clientHeight);
     renderer.setSize(width,height,false);const extent=outerRadius(amount)*1.13,aspect=width/height;
     const halfHeight=extent/Math.min(1,aspect);camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
-    const dpr=Math.min(devicePixelRatio,2);labelCanvas.width=Math.round(width*dpr);labelCanvas.height=Math.round(height*dpr);ink.setTransform(dpr,0,0,dpr,0,0);controls.handleResize();
+    const dpr=Math.min(devicePixelRatio,2);renderer.setPixelRatio(dpr);labelCanvas.width=Math.round(width*dpr);labelCanvas.height=Math.round(height*dpr);ink.setTransform(dpr,0,0,dpr,0,0);controls.handleResize();
+    drawnLabels.clear();
   }
   function fit(view?:string){
     following='';
@@ -273,15 +294,17 @@ export function installOrrery(onOpen:()=>void) {
     camera.lookAt(0,0,0);camera.updateProjectionMatrix();controls.update();resize();
   }
   const observer=new ResizeObserver(()=>{if(dialog.open)resize();});
+  window.addEventListener('displaychange',()=>{if(dialog.open)resize();});
   function draw(now:number){
     if(!dialog.open){frame=0;return;}
+    const seconds=last===undefined?1/60:(now-last)/1000;
     if(!document.hidden&&last!==undefined&&running){
       const next=advanceTime(simulation,(now-last)/1000,rate*direction);simulation=next;
       if(next===MIN_DATE||next===MAX_DATE){running=false;updateStatus('Date limit reached · choose a date between 1000 and 3000, or reverse time.');}
     }
     last=document.hidden?undefined:now;controls.update();
     const touchDelta=touchPan.consume();panBy(touchDelta.x,touchDelta.y);
-    updateScene();renderer.render(scene,camera);updateLabels();
+    updateScene();renderer.render(scene,camera);updateLabels(seconds);
     if(now-lastUI>200){
       updateUI();lastUI=now;
       const pixelsPerUnit=height/(camera.top-camera.bottom)*camera.zoom*renderer.getPixelRatio();

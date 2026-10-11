@@ -58,6 +58,7 @@ body.orrery-open { overflow:hidden; }
 .orrery-speed-label,.orrery-inspect-label { display:flex;align-items:center;gap:9px;color:#8b9bb0;font-size:11px; }
 .orrery-inspect-label { margin-left:4px; }
 .orrery-adjustments { display:grid;grid-template-columns:minmax(350px,1fr) minmax(320px,1.2fr);gap:38px;margin-top:15px;padding-top:13px;border-top:1px solid #202b39; }
+.orrery-adjustment-panel>summary { display:none; }
 .orrery-date-form>label,.orrery-scale-control label { display:block;color:#a8b7c9;font-size:11px; }
 .orrery-date-form small { color:#65768c;font:inherit; }
 .orrery-date-form>div { display:flex;gap:6px;margin-top:6px; }
@@ -97,7 +98,7 @@ body.orrery-open { overflow:hidden; }
   .orrery-kicker { font-size:8px; }
   .orrery-adjustments { grid-template-columns:1fr;gap:10px; }
   .orrery-time { min-width:0; }
-  .orrery-inspect-label { display:none; }
+  .orrery-inspect-label { margin-left:0; }
   .orrery-view-tools { left:8px;top:8px;gap:0; }
   .orrery-view-tools label { margin:0 4px; }
   .orrery-stage-foot { left:12px;right:12px; }
@@ -115,4 +116,35 @@ body.orrery-open { overflow:hidden; }
   .orrery-header { flex-basis:61px; }
   .orrery-controls { padding-top:9px; }
   .orrery-adjustments { margin-top:9px;padding-top:9px; }
+}
+@media (max-width:1180px), (max-height:620px) and (max-width:1600px) {
+  .orrery-header { flex-basis:60px; padding-inline:16px; }
+  .orrery-controls { max-height:50dvh; overflow:auto; padding:10px 16px 8px; }
+  .orrery-stage { min-height:110px; }
+  .orrery-adjustment-panel>summary { display:flex; align-items:center; justify-content:space-between; min-height:36px; margin-top:7px; padding:6px 0; border-top:1px solid #26303c; color:#acbace; cursor:pointer; font-size:11px; list-style:none; }
+  .orrery-adjustment-panel>summary::-webkit-details-marker { display:none; }
+  .orrery-adjustment-panel[open]>summary span { transform:rotate(180deg); }
+  .orrery-adjustments { margin-top:0; padding-top:6px; border-top:0; }
+  .orrery-transport { flex-wrap:wrap; gap:8px 14px; }
+  .orrery-time { min-width:0; }
+  .orrery-view-tools { max-width:calc(100% - 16px); flex-wrap:wrap; }
+  .orrery-info { max-height:calc(100% - 76px); overflow:auto; }
+  .orrery-bottom { flex-wrap:wrap; gap:4px 12px; }
+  .orrery-model-note { margin-left:0; }
+  .orrery-model-note>div { position:fixed; bottom:45px; right:16px; max-height:min(60dvh,440px); overflow:auto; }
+}
+@media (max-width:450px) {
+  .orrery-playback { flex-wrap:wrap; }
+  .orrery-time { flex-basis:100%; }
+  .orrery-inspect-label { flex:1; }
+  #orrery-inspect { width:100%; min-width:0; }
+  .orrery-date-form>div { flex-wrap:wrap; }
+  .orrery-date-form input { flex-basis:100%; }
+  .orrery-header h1 { font-size:23px; }
+  .orrery-emblem { display:none; }
+}
+@media (any-pointer:coarse) {
+  .orrery-dialog button,.orrery-dialog select,.orrery-dialog input[type=datetime-local],.orrery-adjustment-panel>summary { min-height:44px; }
+  .orrery-view-tools label { min-height:36px; }
+  .orrery-dialog .orrery-world-label { min-height:23px; }
 }
