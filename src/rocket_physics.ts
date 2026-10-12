@@ -45,6 +45,38 @@ export interface Guidance {
   mode: string;
   getAngle(state: any): number;
   boundaries?: number[];
+  getThrottle?: (state: any) => number;
+  shouldCutoff?: (state: any) => boolean;
+}
+
+/** Simple feedback guidance, using only available thrust and propellant. It
+ * accelerates upward, turns as radial demand falls, then trims toward a circle.
+ * Throttle is an ideal duty cycle: thrust and flow scale together at fixed Isp. */
+function guidanceOrbit(config): Guidance {
+  const gravity = config.gravity ?? config.environment?.gravity ?? 9.81;
+  const altitude = Math.max(1000, (config.orbitAltitudeKm ?? 200) * 1000);
+  function command(state) {
+    const R = state.planetRadius, r = R + state.y, mu = gravity * R * R;
+    const acceleration = engineAt(state, state.y).thrust / state.mass;
+    if (!(acceleration > 0) || !(R > 0)) return { angle: 90, throttle: 1 };
+    if (!state.launched) return { angle: 90, throttle: 1 };
+    const limit = Math.min(1000, Math.sqrt(2 * gravity * altitude) * .6);
+    const verticalTarget = Math.max(-limit, Math.min(limit, (altitude - state.y) / 60));
+    const radial = mu / (r * r) - state.vx * state.vx / r + (verticalTarget - state.vy) / 20;
+    const radialThrust = Math.max(-acceleration, Math.min(acceleration, radial));
+    const sideways = (Math.sqrt(mu / r) - state.vx) / 20 + state.vx * state.vy / r;
+    const available = Math.sqrt(Math.max(0, acceleration * acceleration - radialThrust * radialThrust));
+    const tangential = Math.max(-available, Math.min(available, sideways));
+    return { angle: Math.atan2(radialThrust, tangential) * RAD_TO_DEG,
+      throttle: Math.min(1, Math.hypot(radialThrust, tangential) / acceleration) };
+  }
+  return { mode: 'orbit_assist', getAngle: state => command(state).angle,
+    getThrottle: state => command(state).throttle,
+    shouldCutoff: state => {
+      const orbit = classifyTrajectory({ ...state, engineOn: false }, gravity);
+      return orbit.kind === 'orbit' && orbit.periapsisAltitude! >= altitude * .98
+        && orbit.apoapsisAltitude! <= altitude * 1.02;
+    } };
 }
 function guidanceFixed(theta0): Guidance { return { mode: 'fixed', getAngle: () => theta0 }; }
 function guidancePitchProgram(theta0, thetaF, t1, t2): Guidance {
@@ -61,6 +93,7 @@ function guidanceProgradeLock(vMin, fallbackTheta): Guidance {
   } };
 }
 function buildGuidance(config): Guidance {
+  if (config.guidanceMode === 'orbit_assist') return guidanceOrbit(config);
   if (config.guidanceMode === 'pitch_program') {
     return guidancePitchProgram(config.launchAngle, config.pitchEnd, config.pitchT1, config.pitchT2);
   }
@@ -116,6 +149,7 @@ function createRocketState(config) {
     launched: false, fizzled: false, mass: config.dryMass + config.propMass,
     outcome: 'flight' as 'flight' | 'impact' | 'no-liftoff', outcomeReason: '',
     burnoutTime: null as number | null, burnoutSpeed: null as number | null,
+    cutoffReason: null as 'orbit' | 'empty' | null,
     apexTime: null as number | null, apexHeight: null as number | null,
     impactTime: null as number | null, impactSpeed: null as number | null,
     impactVx: null as number | null, impactVy: null as number | null,
@@ -187,10 +221,11 @@ function advanceSegment(state, duration, gravity, guidance): RocketState {
   const local = frame(state, gravity);
   const burning = state.engineOn && state.mProp > 0;
   const initialEngine = engineAt(state, state.y);
-  const mdot = burning ? initialEngine.mdot : 0;
+  const throttle = burning ? Math.max(0, Math.min(1, guidance.getThrottle?.(state) ?? 1)) : 0;
+  const mdot = burning ? initialEngine.mdot * throttle : 0;
   const initialDirection = thrustDirection(state, guidance, gravity);
   const half = duration / 2;
-  const firstHalf = thrustIntegrals(state.mass, mdot, burning ? initialEngine.thrust : 0, half);
+  const firstHalf = thrustIntegrals(state.mass, mdot, initialEngine.thrust * throttle, half);
   const midpoint = { ...state, time: state.time + half };
   setKinematics(midpoint,
     local.px + local.vx * half + 0.5 * local.gx * half * half + initialDirection.x * firstHalf.displacement,
@@ -199,6 +234,7 @@ function advanceSegment(state, duration, gravity, guidance): RocketState {
     local.vy + local.gy * half + initialDirection.y * firstHalf.dv);
   const engine = burning ? engineAt(state, midpoint.y)
     : { ...initialEngine, thrust: 0, mdot: 0, Isp: 0, flowRegime: 'off' };
+  engine.thrust *= throttle;
   const direction = thrustDirection(midpoint, guidance, gravity);
   const integrals = thrustIntegrals(state.mass, mdot, engine.thrust, duration);
   const px = local.px + local.vx * duration + 0.5 * local.gx * duration * duration + direction.x * integrals.displacement;
@@ -286,7 +322,7 @@ function stepRocket(state, dt, gravity, guidance = guidanceFixed(state.theta)): 
     let duration = remaining;
     let fuelEnd = false;
     if (next.engineOn && next.mProp > 0) {
-      const flow = engineAt(next, next.y).mdot;
+      const flow = engineAt(next, next.y).mdot * (guidance.getThrottle?.(next) ?? 1);
       if (!(flow > 0)) {
         next.engineOn = false;
         next.thrustMagnitude = 0;
@@ -299,13 +335,23 @@ function stepRocket(state, dt, gravity, guidance = guidanceFixed(state.theta)): 
       const distance = boundary - next.time;
       if (distance > 1e-10 && distance < duration) { duration = distance; fuelEnd = false; }
     }
+    const beforeSegment = next;
     next = segmentWithEvents(next, duration, gravity, guidance);
     if (next.outcome === 'impact') return next;
+    if (beforeSegment.engineOn && guidance.shouldCutoff?.(next)) {
+      next = refineEvent(beforeSegment, duration, gravity, guidance, sample => !guidance.shouldCutoff!(sample));
+      duration = next.time - beforeSegment.time;
+      fuelEnd = false;
+      next.engineOn = false; next.cutoffReason = 'orbit';
+      next.burnoutTime = next.time; next.burnoutSpeed = Math.hypot(next.vx, next.vy);
+      next.thrustMagnitude = 0; next.mdot = 0;
+    }
     if (fuelEnd) {
       next.mProp = 0;
       next.mass = next.mDry;
       next.engineOn = false;
       next.burnoutTime = next.time;
+      next.cutoffReason = 'empty';
       next.burnoutSpeed = Math.hypot(next.vx, next.vy);
       next.thrustMagnitude = 0;
       next.mdot = 0;

@@ -1332,6 +1332,11 @@ function updateRecordedFlight(dt: number) {
     Renderer.setViewTransitionDuration(reducedMotion() ? .01 : settings.durationSeconds);
     const horizon = Math.max(.4, settings.durationSeconds * .6) * deck.clock.rate;
     const ahead = Array.from({ length: 5 }, (_, index) => sampleFlight(run, time + horizon * (index + 1) / 5));
+    if (run.orbit && time >= run.orbit.initial.time) {
+      // Once inserted, frame the complete orbit consistently through each lap.
+      // Manual inspection still owns the camera whenever it is selected.
+      ahead.push(...run.samples.filter((point, index) => point.time >= run.orbit!.initial.time && index % 16 === 0));
+    }
     const contact = time >= run.duration && run.outcome === 'impact';
     Renderer.setRocketCamera({
       state: contact ? { ...state, y: .6, theta: 8 } : state, ahead,

@@ -1,7 +1,7 @@
 import { formatNumber, formatTime } from './number-format.ts';
 export { formatTime } from './number-format.ts';
 import './flight-deck.css';
-import { compatibleRuns, describeChanges, type FlightRecord } from './flight.ts';
+import { compatibleRuns, continueOrbit, describeChanges, type FlightRecord } from './flight.ts';
 import { PlaybackClock } from './playback.ts';
 
 const reducedMotionQuery = typeof matchMedia === 'function'
@@ -75,8 +75,10 @@ export class FlightDeck {
     this.escapeResult.setAttribute('aria-labelledby', 'escape-result-title');
     this.escapeResult.innerHTML = `<button type="button" aria-label="Dismiss escape message">×</button>
       <span class="escape-eyebrow">ONE-WAY TICKET TO SPACE</span>
-      <h2 id="escape-result-title">Escape velocity reached!</h2><p></p>`;
+      <h2 id="escape-result-title">Escape velocity reached!</h2><p></p>
+      <button type="button" class="orbit-continue" hidden>Continue orbiting</button>`;
     this.escapeResult.querySelector('button')!.onclick = () => { this.escapeResult.hidden = true; };
+    this.escapeResult.querySelector<HTMLButtonElement>('.orbit-continue')!.onclick = () => this.continueOrbit();
     parent.append(this.escapeResult);
     settings.addEventListener('keydown', event => {
       if(event.key === 'Escape') { settings.open = false; settings.querySelector('summary')!.focus(); event.stopPropagation(); }
@@ -85,7 +87,10 @@ export class FlightDeck {
     settings.addEventListener('focusout', event => { if(event.relatedTarget && !settings.contains(event.relatedTarget as Node)) settings.open = false; });
     this.button('flight-pause').onclick = () => {
       if (!this.run) return;
-      if (this.clock.time >= this.run.duration) { this.replay(); return; }
+      if (this.clock.time >= this.run.duration) {
+        if (this.run.orbit) this.continueOrbit(); else this.replay();
+        return;
+      }
       this.clock.paused = !this.clock.paused; this.onSeek(); this.update();
     };
     this.button('flight-replay').onclick = () => this.replay();
@@ -142,6 +147,13 @@ export class FlightDeck {
     if (!this.run || this.busy) return;
     this.clock.load(this.run); this.message('Replay — the same recorded physics.'); this.onReplay(); this.update();
   }
+  continueOrbit() {
+    if (!this.run || this.busy || !continueOrbit(this.run)) return;
+    this.input('flight-timeline').max = String(this.run.duration);
+    this.escapeResult.hidden = true; this.clock.paused = false;
+    this.message('Still in orbit. Watching another circuit.');
+    this.onSeek(); this.update();
+  }
   updateComparison() {
     const note = this.get('flight-comparison');
     if (!this.run || !this.baseline || this.run.id === this.baseline.id) { note.textContent = this.pinned ? 'This flight is your pinned baseline.' : 'Your previous flight will stay as a faint trail.'; return; }
@@ -154,6 +166,10 @@ export class FlightDeck {
     const run = this.run, end = run.samples[run.samples.length - 1];
     if (run.outcome === 'no-liftoff') { this.message(end.outcomeReason || 'No lift-off: outward thrust must exceed weight. Try less mass, a steeper angle or more thrust.'); return; }
     if (run.outcome === 'escape') {
+      this.escapeResult.querySelector('.escape-eyebrow')!.textContent = 'ONE-WAY TICKET TO SPACE';
+      this.escapeResult.querySelector('h2')!.textContent = 'Escape velocity reached!';
+      this.escapeResult.querySelector('button')!.setAttribute('aria-label', 'Dismiss escape message');
+      this.escapeResult.querySelector<HTMLButtonElement>('.orbit-continue')!.hidden = true;
       const name = run.config.environment?.name;
       const world = name && !run.config.environment.interpolated ? name[0].toUpperCase() + name.slice(1) : 'this world';
       const text = `This ${run.mode === 'cannon' ? 'cannonball' : 'rocket'} is ${formatNumber(end.y / 1000)} km above ${world} and still heading away. It won’t land again in this simulation, so we’ve paused here. Replay the journey or explore with Manual zoom.`;
@@ -161,7 +177,19 @@ export class FlightDeck {
       this.escapeResult.querySelector('p')!.textContent = text; this.escapeResult.hidden = false;
       this.message(`Escape velocity reached! ${text}`); this.update(); return;
     }
-    if (run.outcome === 'orbit') { this.message('Orbit established: the unpowered path clears the planet. Replay or try another launch.'); return; }
+    if (run.outcome === 'orbit' && run.orbit) {
+      const orbit = run.orbit, laps = run.orbitLaps ?? 1;
+      const text = `Engine off, still going! Your rocket has completed ${laps === 1 ? 'one full circuit' : formatNumber(laps) + ' circuits'}.
+        Its orbit stays between ${formatNumber(orbit.periapsisAltitude / 1000, 1)} and ${formatNumber(orbit.apoapsisAltitude / 1000, 1)} km above the world,
+        taking ${formatTime(orbit.period)} per circuit. We’ve paused for a look; the orbit can keep going in this model without air drag or other bodies.`;
+      this.clock.paused = true;
+      this.escapeResult.querySelector('.escape-eyebrow')!.textContent = 'ROUND THE WORLD, NO ENGINE REQUIRED';
+      this.escapeResult.querySelector('h2')!.textContent = laps === 1 ? 'One whole orbit!' : 'Still going around!';
+      this.escapeResult.querySelector('button')!.setAttribute('aria-label', 'Dismiss orbit message');
+      this.escapeResult.querySelector('p')!.textContent = text;
+      this.escapeResult.querySelector<HTMLButtonElement>('.orbit-continue')!.hidden = false;
+      this.escapeResult.hidden = false; this.message(text); this.update(); return;
+    }
     if (run.outcome !== 'impact') { this.message('Observation ended before a landing or confirmed orbit. Try a shorter burn.'); return; }
     if (run.mode === 'rocket') {
       this.message(`Landed ${formatNumber(end.x - run.launchX, 1)} m from pad · ${formatTime(run.duration)} flight${end.impactSpeed != null ? ` · ${formatNumber(end.impactSpeed, 1)} m/s at contact` : ''}.`); return;
@@ -190,8 +218,8 @@ export class FlightDeck {
     this.button('flight-next').disabled = !run || this.busy || time >= run.duration;
     this.input('flight-timeline').disabled = !run || this.busy;
     const finished = !!(run && time >= run.duration);
-    this.button('flight-pause').textContent = finished ? run.outcome === 'escape' ? 'Paused' : 'Finished' : run && this.clock.paused ? 'Resume' : 'Pause';
+    this.button('flight-pause').textContent = finished ? run.orbit ? 'Continue orbit' : run.outcome === 'escape' ? 'Paused' : 'Finished' : run && this.clock.paused ? 'Resume' : 'Pause';
     this.button('flight-pause').setAttribute('aria-label',
-      !run ? 'Pause flight' : finished ? 'Replay finished flight' : this.clock.paused ? 'Resume flight' : 'Pause flight');
+      !run ? 'Pause flight' : finished ? run.orbit ? 'Continue orbit' : 'Replay finished flight' : this.clock.paused ? 'Resume flight' : 'Pause flight');
   }
 }

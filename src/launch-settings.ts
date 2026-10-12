@@ -7,6 +7,12 @@ export const ROCKET_DEFAULTS = Object.freeze({
   propellantId: 'LOX_RP1', MR: 2.56, Pc_bar: 180, epsilon: 20, throatDia_mm: 15,
   dryMass: 100, propMass: 8, propMassMultiplier: 1, launchAngle: 85, guidanceMode: 'fixed',
   etaC: .95, etaN: .95, pitchEnd: 45, pitchT1: 5, pitchT2: 20, progradeVmin: 10,
+  orbitAltitudeKm: 200,
+});
+
+export const EARTH_ORBIT_EXAMPLE = Object.freeze({ ...ROCKET_DEFAULTS,
+  gravity: 9.81, propellantId: 'LOX_LH2', MR: 6, Pc_bar: 100, throatDia_mm: 100,
+  propMass: 5000, launchAngle: 90, guidanceMode: 'orbit_assist', orbitAltitudeKm: 200,
 });
 
 const cannonFields = { angle: 'angle', mass: 'mass', barrelLength: 'barrel' };
@@ -15,6 +21,7 @@ const rocketFields = {
   dryMass: 'rocket-drymass', launchAngle: 'rocket-angle',
   etaC: 'rocket-etac', etaN: 'rocket-etan', pitchEnd: 'rocket-pitch-end',
   pitchT1: 'rocket-pitch-t1', pitchT2: 'rocket-pitch-t2', progradeVmin: 'rocket-prograde-vmin',
+  orbitAltitudeKm: 'rocket-orbit-altitude',
 };
 
 /** Read the old value before changing bounds: native ranges clamp immediately. */

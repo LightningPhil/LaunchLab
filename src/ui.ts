@@ -2,12 +2,12 @@ import type { RocketDisplay } from './rocket-presentation.ts';
 import { Physics } from './physics.ts';
 import { RocketPropellants } from './rocket_propellants.ts';
 import { RocketPhysics } from './rocket_physics.ts';
-import { ENVIRONMENTS, resolveEnvironment } from './environment.ts';
+import { ENVIRONMENTS, resolveEnvironment, classifyTrajectory } from './environment.ts';
 import { getPlanetFact } from './planet-facts.ts';
 import { installFactExplanations, updateFactLabels } from './fact-dialog.ts';
 import { clampGravity } from './gravity-scale.ts';
 import { getWorldArt } from './world-art.ts';
-import { applyLaunchSettings, CANNON_DEFAULTS, ROCKET_DEFAULTS, setMixtureBounds } from './launch-settings.ts';
+import { applyLaunchSettings, CANNON_DEFAULTS, ROCKET_DEFAULTS, EARTH_ORBIT_EXAMPLE, setMixtureBounds } from './launch-settings.ts';
 import { protectTouchRange } from './touch-range.ts';
 import { formatNumber } from './number-format.ts';
 
@@ -65,6 +65,7 @@ var sliderRocketEtaC, sliderRocketEtaN;
 var rocketGuidanceSelect;
 var sliderPitchEnd, sliderPitchT1, sliderPitchT2, sliderProgradeVmin;
 var guidancePitchSub, guidanceProgradeSub;
+var guidanceOrbitSub, sliderOrbitAltitude, valOrbitAltitude;
 var efficiencySection, efficiencyArrow;
 var btnLaunch, btnRocketClear;
 var twWarning, fizzleMessage;
@@ -520,6 +521,9 @@ function initRocketPanel() {
   rocketGuidanceSelect = document.getElementById('rocket-guidance');
   guidancePitchSub = document.getElementById('guidance-pitch-sub');
   guidanceProgradeSub = document.getElementById('guidance-prograde-sub');
+  guidanceOrbitSub = document.getElementById('guidance-orbit-sub');
+  sliderOrbitAltitude = document.getElementById('slider-rocket-orbit-altitude');
+  valOrbitAltitude = document.getElementById('val-rocket-orbit-altitude');
 
   sliderPitchEnd = document.getElementById('slider-rocket-pitch-end');
   sliderPitchT1 = document.getElementById('slider-rocket-pitch-t1');
@@ -590,6 +594,12 @@ function initRocketPanel() {
   wireRocketSlider(sliderPitchT1, valPitchT1, ' s');
   wireRocketSlider(sliderPitchT2, valPitchT2, ' s');
   wireRocketSlider(sliderProgradeVmin, valProgradeVmin, ' m/s');
+  wireRocketSlider(sliderOrbitAltitude, valOrbitAltitude, ' km');
+  document.getElementById('btn-orbit-example').addEventListener('click', () => {
+    if (isFlightActive) return;
+    onRocketClear?.();
+    restoreFlightConfig('rocket', EARTH_ORBIT_EXAMPLE);
+  });
 
   // Guidance mode dropdown
   rocketGuidanceSelect.addEventListener('change', function () {
@@ -688,6 +698,11 @@ function onPropellantChange() {
 
 function updateGuidanceSubPanels() {
   var mode = rocketGuidanceSelect.value;
+  guidanceOrbitSub.classList.toggle('guidance-sub-hidden', mode !== 'orbit_assist');
+  if (mode === 'orbit_assist') {
+    sliderRocketAngle.value = '90'; updateRocketSliderDisplay(sliderRocketAngle, valRocketAngle, '°');
+  }
+  sliderRocketAngle.disabled = isFlightActive || mode === 'orbit_assist';
   if (mode === 'pitch_program') {
     guidancePitchSub.classList.remove('guidance-sub-hidden');
   } else {
@@ -715,7 +730,7 @@ function updateRocketSliderDisplay(slider, display, unit) {
   if (slider === sliderRocketPropMass) v *= Number(propMassMultiplier.value);
   if (unit === '°') {
     display.textContent = formatNumber(v, 0) + unit;
-  } else if (unit === ' bar' || unit === ' mm' || unit === ' kg' || unit === ' m/s' || unit === ' %') {
+  } else if (unit === ' bar' || unit === ' mm' || unit === ' kg' || unit === ' km' || unit === ' m/s' || unit === ' %') {
     display.textContent = formatNumber(v, 0) + unit;
   } else if (unit === ' s') {
     display.textContent = formatNumber(v, 1) + unit;
@@ -747,6 +762,7 @@ function getRocketValues() {
     propMassMultiplier: Number(propMassMultiplier.value),
     launchAngle: parseFloat(sliderRocketAngle.value),
     guidanceMode: rocketGuidanceSelect.value,
+    orbitAltitudeKm: Number(sliderOrbitAltitude.value),
     etaC: parseFloat(sliderRocketEtaC.value),
     etaN: parseFloat(sliderRocketEtaN.value),
     Pa_Pa: environment.surfacePressure,
@@ -821,6 +837,14 @@ function updateRocketReadouts(state, launchX?) {
   const fuelDigits = state.mPropInitial >= 10000 ? 0 : 1;
   readRocketProp.textContent = formatNumber(state.mProp, fuelDigits) + ' / ' + formatNumber(state.mPropInitial, fuelDigits) + ' kg';
   readRocketImpulse.textContent = formatSI(state.totalImpulse) + 'N\u00B7s';
+  const orbit = classifyTrajectory({ ...state, engineOn: false }, currentGravity());
+  const orbitReadout = document.getElementById('rocket-orbit-readout')!;
+  orbitReadout.hidden = !(state.planetRadius > 0);
+  document.getElementById('rocket-orbit-caption')!.textContent = state.engineOn ? 'If the engine stopped now' : 'Unpowered path';
+  document.getElementById('read-rocket-periapsis')!.textContent = orbit.periapsisAltitude === null ? '—'
+    : formatNumber(orbit.periapsisAltitude / 1000, 1) + ' km';
+  document.getElementById('read-rocket-apoapsis')!.textContent = orbit.apoapsisAltitude === null ? 'Open path'
+    : formatNumber(orbit.apoapsisAltitude / 1000, 1) + ' km';
 
   // Extended live readouts
   if (readRocketLiveThrust) {
@@ -866,6 +890,7 @@ function updateRocketFuel(display: RocketDisplay) {
 }
 
 function resetRocketReadouts() {
+  document.getElementById('rocket-orbit-readout')!.hidden = true;
   readRocketVelocity.textContent = '---';
   readRocketHeight.textContent = '---';
   readRocketRange.textContent = '---';
@@ -1004,8 +1029,9 @@ function setFlightActive(active) {
   // A recorded flight has one immutable setup. Changing gravity or engine
   // controls beneath it would make the labels disagree with the animation.
   document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
-    '.controls-scroll input, .controls-scroll select, .planet-btn'
+    '.controls-scroll input, .controls-scroll select, .planet-btn, #btn-orbit-example'
   ).forEach(function (control) { control.disabled = active; });
+  if (sliderRocketAngle) sliderRocketAngle.disabled = active || rocketGuidanceSelect.value === 'orbit_assist';
   var note = document.getElementById('flight-lock-note');
   if (note) note.hidden = !active;
   if (active) hideTooltip();
@@ -1052,7 +1078,7 @@ function updateAllDisplays() {
     [sliderRocketAngle, valRocketAngle, '°'], [sliderRocketEtaC, valRocketEtaC, ''],
     [sliderRocketEtaN, valRocketEtaN, ''], [sliderPitchEnd, valPitchEnd, '°'],
     [sliderPitchT1, valPitchT1, ' s'], [sliderPitchT2, valPitchT2, ' s'],
-    [sliderProgradeVmin, valProgradeVmin, ' m/s']
+    [sliderProgradeVmin, valProgradeVmin, ' m/s'], [sliderOrbitAltitude, valOrbitAltitude, ' km']
   ].forEach(function ([slider, display, unit]) { updateRocketSliderDisplay(slider, display, unit); });
 }
 

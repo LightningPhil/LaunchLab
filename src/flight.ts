@@ -2,6 +2,7 @@ import { Physics } from './physics.ts';
 import { RocketPhysics } from './rocket_physics.ts';
 import { pressureAtAltitude } from './environment.ts';
 import { ESCAPE_CENTRE_RADII, planBallisticCoast, sampleBallisticCoast, type BallisticCoast } from './ballistic-coast.ts';
+import { planOrbitalCoast, sampleOrbitalCoast, orbitalSampleTimes, orbitalEvents, type OrbitalCoast } from './orbital-coast.ts';
 
 export type FlightEvent = { time: number; kind: string; label: string };
 export type FlightRecord = {
@@ -9,6 +10,8 @@ export type FlightRecord = {
   samples: any[]; events: FlightEvent[]; duration: number; outcome: string;
   maxHeight: number; minX: number; maxX: number; launchX: number;
   coast?: BallisticCoast;
+  orbit?: OrbitalCoast;
+  orbitLaps?: number;
 };
 export const PHYSICS_STEP = 1 / 120;
 export const MIN_CANNON_PATH_POINTS = 20;
@@ -54,6 +57,27 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
   };
   for (let i = 0; i < Math.ceil(maxTime / PHYSICS_STEP) && state.time < maxTime; i++) {
     if (signal?.aborted) throw new DOMException('Flight cancelled', 'AbortError');
+    if (mode === 'rocket' && options.maxTime === undefined && !state.engineOn) {
+      const orbit = planOrbitalCoast(state, saved.gravity);
+      if (orbit) {
+        run.orbit = orbit; run.orbitLaps = 1;
+        addEvent(state.time, 'orbit', 'Orbit established · engine off');
+        for (const event of orbitalEvents(orbit)) addEvent(event.time, event.kind, event.label);
+        for (const time of [...new Set([...orbitalSampleTimes(orbit), orbit.endTime,
+          ...run.events.filter(event => event.time >= state.time).map(event => event.time)])].sort((a, b) => a - b)) {
+          const sample = sampleOrbit(run, time, guidance);
+          run.samples.push(sample);
+          run.minX = Math.min(run.minX, sample.x); run.maxX = Math.max(run.maxX, sample.x);
+          if (performance.now() >= deadline) {
+            await new Promise(resolve => setTimeout(resolve, 0)); deadline = performance.now() + 8;
+            if (signal?.aborted) throw new DOMException('Flight cancelled', 'AbortError');
+          }
+        }
+        run.maxHeight = Math.max(run.maxHeight, orbit.apoapsisAltitude);
+        state = sampleOrbit(run, orbit.endTime, guidance);
+        run.outcome = 'orbit'; addEvent(state.time, 'lap', 'One complete orbit'); break;
+      }
+    }
     // Resolve long, unpowered journeys exactly instead of clipping an ellipse
     // at the numerical recording limit. Short flights keep their usual solver;
     // explicit observation limits and all powered motion still use that path.
@@ -102,9 +126,10 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
     run.maxHeight = Math.max(run.maxHeight, state.y, state.apexHeight ?? 0);
     run.minX = Math.min(run.minX, state.x); run.maxX = Math.max(run.maxX, state.x);
     if (mode === 'rocket' && state.burnoutTime != null && before.burnoutTime == null) {
-      addEvent(state.burnoutTime, 'burnout', 'Engine cutoff');
-      recordEventState(before, state.burnoutTime, { engineOn: false, mProp: 0, mass: state.mDry,
-        thrustMagnitude: 0, mdot: 0, burnoutTime: state.burnoutTime, burnoutSpeed: state.burnoutSpeed });
+      addEvent(state.burnoutTime, 'burnout', state.cutoffReason === 'orbit' ? 'Orbit insertion · engine cutoff' : 'Engine cutoff');
+      recordEventState(before, state.burnoutTime, { engineOn: false, mProp: state.mProp, mass: state.mass,
+        thrustMagnitude: 0, mdot: 0, burnoutTime: state.burnoutTime, burnoutSpeed: state.burnoutSpeed,
+        cutoffReason: state.cutoffReason });
     }
     if (state.apexTime != null && state.apexTime !== before.apexTime && !state.fizzled) {
       addEvent(state.apexTime, 'apex', 'Highest point');
@@ -173,6 +198,37 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
   return run;
 }
 
+function sampleOrbit(run: FlightRecord, time: number, guidance = RocketPhysics.buildGuidance(run.config)) {
+  const state = sampleOrbitalCoast(run.orbit!, time), initial = run.orbit!.initial;
+  Object.assign(state, { engineOn: false, thrustMagnitude: 0, mdot: 0, Isp: 0, flowRegime: 'off',
+    gravityImpulseX: initial.gravityImpulseX + state.wvx - initial.wvx,
+    gravityImpulseY: initial.gravityImpulseY + state.wvy - initial.wvy });
+  if (state.environment) state.Pa_Pa = pressureAtAltitude(state.environment, state.y);
+  state.theta = guidance.mode === 'orbit_assist' ? Math.atan2(state.vy, state.vx) * 180 / Math.PI : guidance.getAngle(state);
+  return state;
+}
+
+/** Extend observation, not physics: an unpowered ellipse has no expiry. Keep a
+ * single complete circuit for drawing so repeated observation has bounded memory. */
+export function continueOrbit(run: FlightRecord): boolean {
+  if (!run.orbit || run.outcome !== 'orbit') return false;
+  const lap = run.orbitLaps ?? 1;
+  run.orbitLaps = lap + 1;
+  run.duration = run.orbit.initial.time + (lap + 1) * run.orbit.period;
+  const launchSamples = run.samples.filter(sample => sample.time < run.orbit!.initial.time);
+  // The first circuit is also the complete geometric trail for later laps.
+  // Keeping it preserves the original replay and avoids an ever-growing path.
+  run.samples = [...launchSamples, ...orbitalSampleTimes(run.orbit).map(time => sampleOrbit(run, time))];
+  run.samples.push(sampleOrbit(run, run.duration));
+  run.events = run.events.filter(event => event.time <= run.orbit!.initial.time);
+  run.events.push(...orbitalEvents(run.orbit));
+  for (const event of orbitalEvents(run.orbit)) run.events.push({ ...event, time: event.time + lap * run.orbit.period });
+  run.events.push({ time: run.duration, kind: 'lap', label: `${lap + 1} complete orbits` },
+    { time: run.duration, kind: 'end', label: 'Result' });
+  run.events.sort((a, b) => a.time - b.time);
+  return true;
+}
+
 function sampleCoast(run: FlightRecord, time: number, guidance = run.mode === 'rocket' ? RocketPhysics.buildGuidance(run.config) : null) {
   const plan = run.coast!, state = sampleBallisticCoast(plan, time), initial = plan.initial;
   if (run.mode === 'rocket') {
@@ -217,6 +273,7 @@ export function sampleFlight(run: FlightRecord, time: number): any {
   const samples = run.samples;
   if (time >= run.duration) return { ...samples[samples.length - 1] };
   if (time <= 0) return { ...samples[0] };
+  if (run.orbit && time >= run.orbit.initial.time) return sampleOrbit(run, time);
   if (run.coast && time >= run.coast.initial.time) return sampleCoast(run, time);
   let lo = 0, hi = samples.length - 1;
   while (hi - lo > 1) { const mid = (lo + hi) >>> 1; if (samples[mid].time <= time) lo = mid; else hi = mid; }
@@ -259,7 +316,8 @@ export function describeChanges(a: FlightRecord, b: FlightRecord): string {
     gravity: 'gravity', dryMass: 'dry mass', propMass: 'fuel load', launchAngle: 'launch angle',
     propellantId: 'propellant', Pc_bar: 'chamber pressure', throatDia_mm: 'throat', epsilon: 'nozzle',
     MR: 'mixture', etaC: 'combustion efficiency', etaN: 'nozzle efficiency', guidanceMode: 'guidance',
-    pitchEnd: 'pitch angle', pitchT1: 'pitch start', pitchT2: 'pitch finish', progradeVmin: 'prograde threshold' };
+    pitchEnd: 'pitch angle', pitchT1: 'pitch start', pitchT2: 'pitch finish', progradeVmin: 'prograde threshold',
+    orbitAltitudeKm: 'target orbit altitude' };
   const changed = Object.entries(names).filter(([key]) => a.config[key] !== b.config[key]).map(([, name]) => name);
   return changed.length ? `Changed: ${changed.join(', ')}` : 'Same settings — repeat experiment';
 }

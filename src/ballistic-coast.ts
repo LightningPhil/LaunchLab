@@ -39,7 +39,7 @@ function periTime(plan: Pick<BallisticCoast, 'q' | 'eccentricity' | 'alpha' | 'm
   return (plan.q * u + plan.eccentricity * u ** 3 * stumpff(plan.alpha * u * u).s) / Math.sqrt(plan.mu);
 }
 
-/** Safe orbits are deliberately left to the existing orbit observation path.
+/** Safe orbits are handled separately by the rocket orbital coast solver.
  * Returning conics must actually intersect the surface; speed alone is not
  * sufficient to infer a landing from an arbitrary airborne rocket state. */
 export function planBallisticCoast(initial: any, gravity: number): BallisticCoast | null {

@@ -259,6 +259,14 @@
 <span class="readout-label">Total impulse</span>
 <span class="readout-value " id="read-rocket-impulse">—</span>
 </div>
+<div id="rocket-orbit-readout" hidden>
+<p class="engine-state" id="rocket-orbit-caption">Unpowered path</p>
+<div class="readout-grid">
+<span class="readout-label">Lowest point</span><span class="readout-value" id="read-rocket-periapsis">—</span>
+<span class="readout-label">Highest point</span><span class="readout-value" id="read-rocket-apoapsis">—</span>
+</div>
+<p class="field-note">A lowest point below 0 km means the path meets the world.</p>
+</div>
 <p class="engine-state" id="read-rocket-engine" role="status">Tanks ready</p>
 <div class="prop-gauge-container" id="prop-gauge" role="progressbar" aria-label="Propellant remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
 <div class="prop-gauge-segment prop-gauge-ox" id="prop-gauge-ox">
@@ -407,14 +415,25 @@
 <details class="lab-details">
 <summary>Guidance</summary>
 <div class="details-content">
+<button type="button" class="settings-reset" id="btn-orbit-example">Load Earth orbit example <span aria-hidden="true">↗</span></button>
+<p class="settings-reset-note">A ready-to-launch rocket aiming for 200 km above Earth. Load it, then Lift off.</p>
 <div class="slider-row">
 <label for="rocket-guidance">Steering</label>
 <select id="rocket-guidance" class="rocket-select">
 <option value="fixed">Hold launch angle</option>
 <option value="pitch_program">Timed pitch</option>
 <option value="prograde_lock">Follow velocity</option>
+<option value="orbit_assist">Orbit assist</option>
 </select>
 <p class="field-note">The rocket’s nose shows thrust direction. Its velocity arrow shows where it is travelling.</p>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-orbit-sub">
+<div class="slider-row">
+<div class="slider-label-row"><label for="slider-rocket-orbit-altitude">Target orbit altitude</label>
+<output class="slider-value" id="val-rocket-orbit-altitude" for="slider-rocket-orbit-altitude">200 km</output></div>
+<input type="range" id="slider-rocket-orbit-altitude" min="10" max="2000" value="200" step="10" aria-label="Target orbit altitude">
+</div>
+<p class="field-note">Starts upright, turns and throttles toward a circular orbit, then saves the remaining fuel. Your engine still needs enough thrust and propellant. Air drag is not modelled.</p>
 </div>
 <div class="guidance-sub guidance-sub-hidden" id="guidance-pitch-sub">
 <div class="slider-row">
