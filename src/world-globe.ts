@@ -1,46 +1,70 @@
 import { WORLD_MAPS } from './world-textures.ts';
+import { SurfaceLod } from './surface-lod.ts';
+import { globeSize, projectGlobeRows } from './globe-projection.ts';
 
-// Bake the existing illustrated maps onto an orthographic sphere once per world.
-// This keeps the launch scene on its lightweight 2D canvas, including offline.
-const globes = new Map<string, HTMLCanvasElement | null>();
-export function worldGlobe(name: string): HTMLCanvasElement | null {
-  if (globes.has(name)) return globes.get(name)!;
-  if (typeof document === 'undefined' || typeof Image === 'undefined' || !WORLD_MAPS[name]) return null;
-  globes.set(name, null);
+// Serialise large image decodes / projections, including rapid world changes.
+// The renderer keeps the previous resolution while an upgrade is in progress.
+let bakeQueue: Promise<unknown> = Promise.resolve();
+const globes = new Map<string, { surface: SurfaceLod<HTMLCanvasElement>; lastUse: number }>();
+const release = (canvas: HTMLCanvasElement) => { canvas.width = canvas.height = 1; };
+const yieldFrame = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+async function bake(name: string, level: number, cancelled: () => boolean): Promise<HTMLCanvasElement> {
+  if (cancelled()) throw new Error('Obsolete globe');
   const image = new Image();
-  image.onload = () => {
-    try {
-      const source = document.createElement('canvas');
-      source.width = image.naturalWidth; source.height = image.naturalHeight;
-      const sourceContext = source.getContext('2d', { willReadFrequently: true })!;
-      sourceContext.drawImage(image, 0, 0);
-      const pixels = sourceContext.getImageData(0, 0, source.width, source.height).data;
-      const globe = document.createElement('canvas');
-      globe.width = globe.height = 640;
-      const context = globe.getContext('2d')!;
-      const result = context.createImageData(globe.width, globe.height);
-      for (let y = 0; y < globe.height; y++) for (let x = 0; x < globe.width; x++) {
-        const nx = (x + .5) * 2 / globe.width - 1, ny = (y + .5) * 2 / globe.height - 1;
-        const square = nx * nx + ny * ny;
-        if (square >= 1) continue;
-        const nz = Math.sqrt(1 - square);
-        const u = (.5 + Math.atan2(nx, nz) / (Math.PI * 2)) * source.width;
-        const v = (.5 + Math.asin(ny) / Math.PI) * (source.height - 1);
-        const ix = Math.floor(u), iy = Math.floor(v), fx = u - ix, fy = v - iy;
-        const light = name === 'sun' ? .68 + .32 * nz
-          : .25 + .78 * Math.max(0, -.4 * nx - .4 * ny + .8246 * nz);
-        const output = (y * globe.width + x) * 4;
-        for (let channel = 0; channel < 3; channel++) {
-          const sample = (sx: number, sy: number) => pixels[(Math.min(source.height - 1, sy) * source.width + sx % source.width) * 4 + channel];
-          const upper = sample(ix, iy) * (1 - fx) + sample(ix + 1, iy) * fx;
-          const lower = sample(ix, iy + 1) * (1 - fx) + sample(ix + 1, iy + 1) * fx;
-          result.data[output + channel] = (upper * (1 - fy) + lower * fy) * light;
-        }
-        result.data[output + 3] = Math.min(1, (1 - Math.sqrt(square)) * globe.width / 2) * 255;
-      }
-      context.putImageData(result, 0, 0); globes.set(name, globe);
-    } catch { /* The procedural sphere remains usable if an image cannot load. */ }
-  };
-  image.src = WORLD_MAPS[name].overview;
-  return null;
+  image.decoding = 'async';
+  image.src = WORLD_MAPS[name][level].url;
+  await image.decode();
+  if (cancelled()) { image.src = ''; throw new Error('Obsolete globe'); }
+  const source = document.createElement('canvas');
+  const size = globeSize(image.naturalWidth);
+  // Decode once, then discard the source canvas and image before projecting.
+  source.width = image.naturalWidth / 2; source.height = image.naturalHeight;
+  const sourceContext = source.getContext('2d', { willReadFrequently: true })!;
+  sourceContext.drawImage(image, image.naturalWidth / 4, 0, source.width, source.height,
+    0, 0, source.width, source.height);
+  const { width, height } = source;
+  const pixels = sourceContext.getImageData(0, 0, width, height).data;
+  release(source); image.src = '';
+  const globe = document.createElement('canvas');
+  globe.width = globe.height = size;
+  const context = globe.getContext('2d')!;
+  const result = context.createImageData(size, size);
+  let row = 0;
+  while (row < size) {
+    if (cancelled()) { release(globe); throw new Error('Obsolete globe'); }
+    const started = performance.now();
+    do {
+      const end = Math.min(size, row + 8);
+      projectGlobeRows(pixels, width, height, result.data, size, row, end, name === 'sun');
+      row = end;
+    } while (row < size && performance.now() - started < 4);
+    if (row < size) await yieldFrame();
+  }
+  context.putImageData(result, 0, 0);
+  return globe;
+}
+
+/** Diameter in physical pixels, so OS zoom and Retina screens get sharp maps. */
+export function worldGlobe(name: string, pixels: number): HTMLCanvasElement | null {
+  if (typeof document === 'undefined' || !WORLD_MAPS[name]) return null;
+  const now = performance.now();
+  for (const [key, entry] of globes) {
+    if (now - entry.lastUse > 15000) { entry.surface.disposeAll(); globes.delete(key); }
+  }
+  let entry = globes.get(name);
+  if (!entry) {
+    if (globes.size >= 3) {
+      const oldest = [...globes].sort((a, b) => a[1].lastUse - b[1].lastUse)[0];
+      oldest[1].surface.disposeAll(); globes.delete(oldest[0]);
+    }
+    const surface = new SurfaceLod<HTMLCanvasElement>(WORLD_MAPS[name].length, (level, cancelled) => {
+      const job = bakeQueue.then(() => bake(name, level, cancelled));
+      bakeQueue = job.catch(() => {});
+      return job;
+    }, release);
+    entry = { surface, lastUse: now }; globes.set(name, entry);
+  }
+  entry.lastUse = now;
+  return entry.surface.update(pixels, now) ?? null;
 }

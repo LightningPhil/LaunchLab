@@ -4,6 +4,27 @@ LaunchLab's proprietary licence applies to its original project materials.
 It does not replace the licences of third-party components. Rights granted
 under the notices below apply to those components, not to LaunchLab as a whole.
 
+Planet surface textures — Solar System Scope / INOVE
+https://www.solarsystemscope.com/textures/
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+Sun, Mercury, Venus atmosphere, Earth day map, Mars, Jupiter, Saturn,
+Uranus, Neptune and Moon. Source maps are based on NASA imagery/elevation
+with artistic colour adjustments and some fictional gap filling.
+LaunchLab resizes and converts the maps to WebP, then applies globe shading.
+No endorsement by the creators is implied.
+
+Pluto, Ganymede and Charon surface textures — NASA Visualization Technology
+Applications and Development (VTAD), extracted from NASA's public 3D models:
+https://science.nasa.gov/resource/pluto-3d-model/
+https://science.nasa.gov/resource/ganymede-3d-model/
+https://science.nasa.gov/resource/charon-3d-model/
+NASA media usage guidelines: https://www.nasa.gov/nasa-brand-center/images-and-media/
+LaunchLab resizes and converts the base-colour maps to WebP and applies
+globe shading. These are visualization assets; source detail varies by region.
+NASA material is used for educational visualization, without endorsement.
+Exact downloads, native dimensions and checksums: tools/world-texture-sources.json.
+
 Three.js 0.186.1 (including TrackballControls)
 https://threejs.org/
 https://github.com/mrdoob/three.js

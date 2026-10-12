@@ -2551,7 +2551,7 @@ function drawGlobeSurface() {
   ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
   for (const [planet, alpha] of [[env.lowerPlanet, env.lowerAlpha], [env.upperPlanet, env.upperAlpha]] as const) {
     if (alpha < .01) continue;
-    const globe = worldGlobe(planet.name);
+    const globe = worldGlobe(planet.name, curveRadiusPx * 2 * pixelRatio);
     if (!globe) continue;
     ctx.globalAlpha = visibility * alpha;
     ctx.drawImage(globe, curveCentreX - curveRadiusPx, curveCentreY - curveRadiusPx, curveRadiusPx * 2, curveRadiusPx * 2);

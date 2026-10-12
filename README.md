@@ -49,6 +49,8 @@ The book button immediately left of Settings opens a separate manual with a topi
 
 The **Orrery** starts at **1 week per minute**. Drag with one finger to rotate, pinch to zoom, or move two fingers together to pan sideways and up or down. Panning and pinching can be combined. With a mouse, drag to rotate, scroll to zoom and right-drag to pan. **Fit system** brings the solar system back into view.
 
+Whole-world artwork in flights and orrery close-ups uses up to three texture levels: 512-pixel overviews, detailed maps up to 2K, and close-ups up to 8K where supported by the original source. Both views account for screen density and load detail on demand, retaining a lower-resolution view while it arrives. All maps also work in the portable HTML. See [surface artwork and credits](docs/orrery-textures.md) for each world's native resolution and sources.
+
 ## Explore the Solar System
 
 Every world fact card has ten keyboard- and touch-accessible explanation buttons. The popups turn scientific notation into full tonnes and a clearly defined five-tonne elephant comparison, explain sizes with Earth comparisons, distances with light-travel time, and gravity with an unchanged 10 kg bag. Temperature cards identify their locations and distinguish WMO air records, lunar polar shadows, daytime maps and specific giant-planet atmospheric layers. Original explanatory copy links to NASA and WMO sources; integer arithmetic preserves the zeros in rounded mass values. Each popup supports Escape, focus return and previous/next fact navigation.

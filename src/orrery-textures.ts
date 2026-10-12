@@ -2,25 +2,29 @@ import * as THREE from 'three';
 import { seeded, type World } from './orrery-model.ts';
 
 import { WORLD_MAPS as MAPS } from './world-textures.ts';
+import { SurfaceLod } from './surface-lod.ts';
 
 type SurfaceMaterial = THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
 const loader=new THREE.TextureLoader();
 export class PlanetSurface {
   readonly material:SurfaceMaterial;
-  private overview?:THREE.Texture;
-  private detail?:THREE.Texture;
-  private loading=false;
-  private failed=false;
-  private wantsDetail=false;
-  private lastDetailUse=0;
-  constructor(readonly world:World,private anisotropy:number){
+  private surface:SurfaceLod<THREE.Texture>;
+  constructor(readonly world:World,private anisotropy:number,maxTextureSize=8192){
     this.material=world.id==='sun'
       ?new THREE.MeshBasicMaterial({color:world.colour})
       :new THREE.MeshStandardMaterial({color:world.colour,roughness:world.id==='earth'?.68:.95,metalness:0});
-    loader.load(MAPS[world.id].overview,texture=>{
-      this.configure(texture);this.overview=texture;
-      if(!this.detail||!this.wantsDetail)this.use(texture);
-    },undefined,()=>{ /* Retain a coloured sphere if an asset cannot be loaded. */ });
+    const maps=MAPS[world.id].filter(map=>map.width<=maxTextureSize);
+    this.surface=new SurfaceLod(maps.length,(level)=>new Promise((resolve,reject)=>{
+      loader.load(maps[level].url,texture=>{
+        this.configure(texture);resolve(texture);
+      },undefined,reject);
+    }),texture=>{
+      // The overview becomes active before a larger texture is disposed.
+      if(this.material.map===texture){
+        this.material.map=null;this.material.color.set(world.colour);this.material.needsUpdate=true;
+      }
+      texture.dispose();
+    });
   }
   private configure(texture:THREE.Texture){
     texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=THREE.RepeatWrapping;
@@ -34,25 +38,10 @@ export class PlanetSurface {
   }
   /** Projected physical pixel diameter; off-screen objects use zero. */
   update(pixels:number,now:number){
-    this.wantsDetail=pixels>(this.wantsDetail?64:96);
-    if(this.wantsDetail){
-      this.lastDetailUse=now;
-      if(this.detail){this.use(this.detail);return;}
-      if(!this.loading&&!this.failed){
-        this.loading=true;
-        loader.load(MAPS[this.world.id].detail,texture=>{
-          this.configure(texture);this.detail=texture;this.loading=false;
-          if(this.wantsDetail)this.use(texture);
-        },undefined,()=>{this.loading=false;this.failed=true;});
-      }
-    }else{
-      if(this.overview&&this.material.map!==this.overview)this.use(this.overview);
-      // Release large GPU maps after leaving a close-up. Overview maps stay warm.
-      if(this.detail&&now-this.lastDetailUse>15000&&this.overview){
-        this.detail.dispose();this.detail=undefined;
-      }
-    }
+    const texture=this.surface.update(pixels,now);
+    if(texture&&this.material.map!==texture)this.use(texture);
   }
+  releaseDetails(){this.surface.releaseDetails();this.update(0,performance.now());}
 }
 
 export function haloTexture():THREE.CanvasTexture {
