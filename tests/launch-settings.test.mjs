@@ -25,7 +25,8 @@ function controls() {
       : id === '#rocket-guidance' ? { value:'fixed' } : new Range());
     return nodes.get(id);
   } };
-  for (const [id, min, max] of [['force', 100, 10000], ['mass', .1, 10], ['barrel', 1, 10]]) {
+  for (const [id, min, max] of [['force', 100, 10000], ['mass', .1, 10], ['barrel', 1, 10],
+    ['rocket-propmass', 1, 5000], ['rocket-dt', 5, 2000]]) {
     const input = root.querySelector('#slider-' + id); input.min = String(min); input.max = String(max);
   }
   applyLaunchSettings(root, 'cannon', CANNON_DEFAULTS);
@@ -44,6 +45,29 @@ test('cannon edits and resets cannot change the rocket or chosen world', () => {
   assert.equal(h.nodes.has('#slider-gravity'), false, 'settings restoration does not select a world');
   assert.equal(h.value('#slider-angle'), '45');
   assert.equal(h.value('#slider-barrel'), '2');
+});
+
+test('multiplied propellant survives replay, legacy restoration and reset without changing the cannon', () => {
+  const h = controls();
+  applyLaunchSettings(h.root, 'cannon', { force: 10000000, forceMultiplier: 1000 });
+  for (const multiple of [1, 10, 100, 1000]) for (const base of [1, 8, 5000]) {
+    applyLaunchSettings(h.root, 'rocket', { propMass: base * multiple, propMassMultiplier: multiple });
+    assert.equal(Number(h.value('#slider-rocket-propmass')), base);
+    assert.equal(Number(h.value('#rocket-propellant-multiplier')), multiple);
+  }
+  applyLaunchSettings(h.root, 'rocket', { propMass: 8000 });
+  assert.equal(h.value('#slider-rocket-propmass'), '800');
+  assert.equal(h.value('#rocket-propellant-multiplier'), '10');
+  applyLaunchSettings(h.root, 'rocket', { propMass: 5000000, throatDia_mm: 2000 });
+  assert.equal(h.value('#slider-rocket-propmass'), '5000');
+  assert.equal(h.value('#rocket-propellant-multiplier'), '1000');
+  assert.equal(h.value('#slider-rocket-dt'), '2000');
+  applyLaunchSettings(h.root, 'rocket', ROCKET_DEFAULTS);
+  assert.equal(h.value('#slider-rocket-propmass'), '8');
+  assert.equal(h.value('#rocket-propellant-multiplier'), '1');
+  assert.equal(h.value('#slider-rocket-dt'), '15');
+  assert.equal(h.value('#slider-force'), '10000');
+  assert.equal(h.value('#force-multiplier'), '1000');
 });
 
 test('multiplied cannon force survives replay, legacy restoration and reset', () => {

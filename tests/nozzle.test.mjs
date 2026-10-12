@@ -50,3 +50,20 @@ test('nozzle cutaway identifies separated and unchoked flow', () => {
   assert.ok(unchoked.includes('not choked'));
   assert.ok(!unchoked.includes('over-exp'));
 });
+
+test('throat diameter visibly resizes the sketch without fitting away the change', () => {
+  for (const [width, height] of [[240, 115], [300, 115]]) for (const epsilon of [5, 20, 200]) {
+    let previous;
+    for (const diameter of [5, 15, 50, 200, 500, 1000, 2000]) {
+      const layout = NozzleRender.computeLayout({ throatDia_mm: diameter, epsilon }, width, height);
+      if (previous) for (const key of ['throatHalfH', 'chamberHalfH', 'exitHalfH']) {
+        assert.ok(layout[key] > previous[key], `${key} must grow at ${diameter} mm, ε=${epsilon}`);
+      }
+      assert.ok(Math.max(layout.chamberHalfH, layout.exitHalfH) <= height * .42 + 1e-10);
+      assert.ok(Math.abs((layout.exitHalfH / layout.throatHalfH) ** 2 - epsilon) < 1e-10);
+      assert.equal(layout.throatDiameter, diameter);
+      previous = layout;
+    }
+  }
+  assert.ok(nozzleLabels(0, { throatDia_mm: 2000 }).includes('Throat 2,000 mm  ·  Exit 8,944 mm'));
+});

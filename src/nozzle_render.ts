@@ -1,4 +1,5 @@
 import { RocketPropellants } from './rocket_propellants.ts';
+import { formatNumber } from './number-format.ts';
 
 /**
  * ============================================================================
@@ -112,7 +113,8 @@ function roundRectPath(ctx, x, y, w, h, r) {
 // internal drawing area.
 //
 function computeLayout(d, iw, ih) {
-  var At     = d.At || 0.002;
+  const throatDiameter = d.throatDia_mm > 0 ? d.throatDia_mm : Math.sqrt((d.At || .002) / Math.PI) * 2000;
+  var At     = Math.PI * (throatDiameter / 2000) ** 2;
   var eps    = clamp(d.epsilon || 20, 2, 250);
   var MR     = clamp(d.MR || 2.5, 0.5, 15);
   var mdot   = Math.max(0, d.mdot ?? 5);
@@ -143,22 +145,17 @@ function computeLayout(d, iw, ih) {
   var xExit     = xThroatEnd + divFrac * iw;
 
   // ── Half-heights ──
-  var CR = 4;  // contraction ratio (typical)
+  var chamberRadiusRatio = 4; // schematic chamber; its area is 16 throat areas
   var maxHalfH = ih * 0.42;  // leave room for labels/title
-  // Throat: minimum visual size
-  var throatHalfH = ih * 0.06;
-  // Chamber: based on contraction ratio
-  var chamberHalfH = throatHalfH * clamp(CR, 2, 8);
-  // Exit: based on expansion ratio
+  // Compress the 5–2,000 mm diameter range so small engines stay readable.
+  // Apply this AFTER the fit calculation: fitting each resized nozzle back to
+  // the same height would hide the diameter change again. Area ratios remain
+  // exact within the cross-section, while absolute size is illustrative.
+  const size = .32 + .68 * clamp(Math.log1p(throatDiameter / 5) / Math.log1p(2000 / 5), 0, 1);
+  const fittedThroat = Math.min(ih * .1, maxHalfH / Math.max(chamberRadiusRatio, Math.sqrt(eps)));
+  var throatHalfH = fittedThroat * size;
+  var chamberHalfH = throatHalfH * chamberRadiusRatio;
   var exitHalfH = throatHalfH * Math.sqrt(eps);
-  // Clamp to fit
-  var maxNeeded = Math.max(chamberHalfH, exitHalfH);
-  if (maxNeeded > maxHalfH) {
-    var shrink = maxHalfH / maxNeeded;
-    throatHalfH  *= shrink;
-    chamberHalfH *= shrink;
-    exitHalfH    *= shrink;
-  }
 
   // ── Pipe sizes (from MR) ──
   var basePipeH = chamberHalfH * 0.18;
@@ -193,6 +190,7 @@ function computeLayout(d, iw, ih) {
     output: output,
     Pc_bar: Pc_bar,
     At: At,
+    throatDiameter: throatDiameter,
     // Inner dims
     iw: iw,
     ih: ih
@@ -570,18 +568,18 @@ function drawStreamlines(ctx, L, cy, worldTime) {
 
 // ── 5. Annotations & Labels ──────────────────────────────────────────────
 
-function drawLabels(ctx, L, cy, d) {
+function drawLabels(ctx, L, cy) {
   var labelY=cy-Math.max(L.chamberHalfH,L.exitHalfH)-9;
   ctx.font='500 11px system-ui, sans-serif';
   ctx.fillStyle='#dbe1d7';ctx.textAlign='center';ctx.textBaseline='bottom';
   ctx.fillText('Chamber',(L.xChamber+L.xConvStart)/2,labelY);
   ctx.fillText('Throat',(L.xThroat+L.xThroatEnd)/2,labelY);
   ctx.fillText('Bell',(L.xThroatEnd+L.xExit)/2,labelY);
-  var throat=d.throatDia_mm||50;
-  var exit=throat*Math.sqrt(d.epsilon||20);
+  var throat=L.throatDiameter;
+  var exit=throat*Math.sqrt(L.eps);
   ctx.textAlign='left';ctx.textBaseline='top';ctx.fillStyle='#b9c9c7';
   ctx.font='10px system-ui, sans-serif';
-  ctx.fillText('Throat '+Math.round(throat)+' mm  ·  Exit '+Math.round(exit)+' mm',L.xFeed,cy+Math.max(L.chamberHalfH,L.exitHalfH)+24);
+  ctx.fillText('Throat '+formatNumber(throat)+' mm  ·  Exit '+formatNumber(exit)+' mm',L.xFeed,cy+Math.max(L.chamberHalfH,L.exitHalfH)+24);
 }
 
 // ── Main draw function ───────────────────────────────────────────────────
@@ -621,6 +619,8 @@ function draw(ctx, canvasW, canvasH, d, panel = false) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillText('Nozzle Sketch', ix + PADDING, iy + 10);
+  ctx.font = '10px system-ui, sans-serif'; ctx.fillStyle = '#b9c9c7'; ctx.textAlign = 'right';
+  ctx.fillText('Sizes compressed', ix + iw - PADDING, iy + 11);
 
   // ── Internal coordinate system ──
   // Drawing area within padding
@@ -654,7 +654,7 @@ function draw(ctx, canvasW, canvasH, d, panel = false) {
   drawStreamlines(ctx, L, cy, worldTime);
 
   // ── Labels & dimensions ──
-  drawLabels(ctx, L, cy, d);
+  drawLabels(ctx, L, cy);
   if (d.engineLabel) {
     ctx.font = '500 10px system-ui, sans-serif';
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
@@ -679,5 +679,5 @@ function draw(ctx, canvasW, canvasH, d, panel = false) {
 export const NozzleRender = {
   draw: draw,
   drawPanel: (ctx, width, height, data) => draw(ctx, width, height, data, true),
-  insetBounds
+  insetBounds, computeLayout
 };

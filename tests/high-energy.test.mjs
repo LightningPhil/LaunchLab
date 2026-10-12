@@ -5,6 +5,9 @@ import { Physics } from '../src/physics.ts';
 import { recordFlight, sampleFlight, MAX_RECORD_TIME } from '../src/flight.ts';
 import { PlaybackClock, MAX_AUTO_VIEW_SECONDS } from '../src/playback.ts';
 import { ESCAPE_CENTRE_RADII } from '../src/ballistic-coast.ts';
+import { RocketPhysics } from '../src/rocket_physics.ts';
+import { ROCKET_DEFAULTS } from '../src/launch-settings.ts';
+import { rocketDisplay } from '../src/rocket-presentation.ts';
 
 function launch(environment, force = 10000000, mass = .1, barrelLength = 10) {
   const config = { force, forceMultiplier: 1000, angle: 45, mass, barrelLength,
@@ -89,4 +92,40 @@ test('a deliberately shortened escape keeps its known outcome and explicit obser
   assert.equal(run.duration, 10);
   assert.ok(run.events.some(e => e.kind === 'end' && e.label === 'Observation limit'));
   assert.ok(!run.events.some(e => e.kind === 'impact'));
+});
+
+test('multiplied rocket fuel supports complete returns and escapes with playable Auto and exact replay', async () => {
+  for (const name of ['earth', 'moon']) for (const multiple of [1, 10, 100, 1000]) {
+    const environment = ENVIRONMENTS.find(e => e.name === name);
+    const config = { ...ROCKET_DEFAULTS, environment, gravity: environment.gravity, planetRadius: environment.radius,
+      propMass: 5000 * multiple, propMassMultiplier: multiple, Pc_bar: 300,
+      throatDia_mm: multiple === 1000 ? 2000 : Math.round(60 * Math.sqrt(multiple)) };
+    const pre = RocketPhysics.computePreLaunch(config, config.gravity);
+    assert.equal(pre.canLaunch, true);
+    const run = await recordFlight('rocket', config, RocketPhysics.createRocketState(config));
+    const end = run.samples.at(-1), expected = name === 'earth' && multiple === 1 ? 'impact' : 'escape';
+    assert.equal(run.outcome, expected, `${name} ×${multiple}`);
+    assert.equal(run.config.propMassMultiplier, multiple);
+    assert.equal(run.samples[0].mPropInitial, 5000 * multiple);
+    assert.ok(Math.abs(end.burnoutTime - pre.burnTime) < 1e-6);
+    assert.equal(end.mProp, 0); assert.equal(end.mass, config.dryMass);
+    if (expected === 'impact') { assert.ok(run.duration > 2 * 86400); assert.equal(end.y, 0); }
+    else assert.ok(end.y >= 9 * environment.radius - .001);
+    const halfwayThroughBurn = sampleFlight(run, end.burnoutTime * .5);
+    assert.ok(Math.abs(halfwayThroughBurn.mProp / config.propMass - .5) < 1e-9);
+    assert.ok(Math.abs(rocketDisplay(halfwayThroughBurn, config).fraction - .5) < 1e-9);
+    assert.deepEqual(sampleFlight(run, end.burnoutTime * .5), halfwayThroughBurn);
+    assert.ok(run.samples.length < 16000);
+    const clock = new PlaybackClock(); clock.load(run); clock.advance(MAX_AUTO_VIEW_SECONDS, run);
+    assert.equal(clock.time, run.duration); assert.equal(clock.paused, true);
+  }
+});
+
+test('extra propellant adds real weight and cannot silently lift off with an undersized engine', async () => {
+  const environment = ENVIRONMENTS.find(e => e.name === 'earth');
+  const config = { ...ROCKET_DEFAULTS, environment, gravity: environment.gravity,
+    planetRadius: environment.radius, propMass: 5000000, propMassMultiplier: 1000 };
+  assert.equal(RocketPhysics.computePreLaunch(config, config.gravity).canLaunch, false);
+  const run = await recordFlight('rocket', config, RocketPhysics.createRocketState(config));
+  assert.equal(run.outcome, 'no-liftoff'); assert.equal(run.samples.at(-1).mProp, 5000000);
 });

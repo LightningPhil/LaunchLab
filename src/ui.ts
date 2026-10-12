@@ -60,7 +60,7 @@ var activeTooltipAnchor = null;
 // ── Rocket DOM references (populated in initRocketPanel) ───────────────────
 var rocketPropSelect, propellantNote;
 var sliderRocketMR, sliderRocketPc, sliderRocketEps, sliderRocketDt;
-var sliderRocketDryMass, sliderRocketPropMass, sliderRocketAngle;
+var sliderRocketDryMass, sliderRocketPropMass, sliderRocketAngle, propMassMultiplier;
 var sliderRocketEtaC, sliderRocketEtaN;
 var rocketGuidanceSelect;
 var sliderPitchEnd, sliderPitchT1, sliderPitchT2, sliderProgradeVmin;
@@ -498,6 +498,11 @@ function initRocketPanel() {
   sliderRocketDt = document.getElementById('slider-rocket-dt');
   sliderRocketDryMass = document.getElementById('slider-rocket-drymass');
   sliderRocketPropMass = document.getElementById('slider-rocket-propmass');
+  propMassMultiplier = document.getElementById('rocket-propellant-multiplier');
+  propMassMultiplier.addEventListener('change', () => {
+    updateRocketSliderDisplay(sliderRocketPropMass, valRocketPropMass, ' kg');
+    refreshPreLaunch();
+  });
   sliderRocketAngle = document.getElementById('slider-rocket-angle');
   sliderRocketEtaC = document.getElementById('slider-rocket-etac');
   sliderRocketEtaN = document.getElementById('slider-rocket-etan');
@@ -707,6 +712,7 @@ function wireRocketSlider(slider, display, unit) {
 
 function updateRocketSliderDisplay(slider, display, unit) {
   var v = parseFloat(slider.value);
+  if (slider === sliderRocketPropMass) v *= Number(propMassMultiplier.value);
   if (unit === '°') {
     display.textContent = formatNumber(v, 0) + unit;
   } else if (unit === ' bar' || unit === ' mm' || unit === ' kg' || unit === ' m/s' || unit === ' %') {
@@ -737,7 +743,8 @@ function getRocketValues() {
     epsilon: parseFloat(sliderRocketEps.value),
     throatDia_mm: parseFloat(sliderRocketDt.value),
     dryMass: parseFloat(sliderRocketDryMass.value),
-    propMass: parseFloat(sliderRocketPropMass.value),
+    propMass: parseFloat(sliderRocketPropMass.value) * Number(propMassMultiplier.value),
+    propMassMultiplier: Number(propMassMultiplier.value),
     launchAngle: parseFloat(sliderRocketAngle.value),
     guidanceMode: rocketGuidanceSelect.value,
     etaC: parseFloat(sliderRocketEtaC.value),
@@ -787,7 +794,7 @@ function updatePreLaunchReadouts(pre) {
       ? 'Chamber pressure is too low for choked nozzle flow in this atmosphere. Try higher chamber pressure.'
       : pre.thrust <= 0
         ? 'This nozzle cannot produce thrust in this atmosphere. Try higher chamber pressure or a smaller expansion ratio.'
-      : 'Not enough upward thrust for immediate lift-off. Try less mass, more thrust, or a steeper launch.';
+      : 'Too heavy for this engine. In the workshop, increase throat diameter or chamber pressure; or try less propellant and a steeper launch.';
     twWarning.classList.remove('tw-warning-hidden');
     btnLaunch.classList.add('caution');
   } else {
@@ -811,7 +818,8 @@ function updateRocketReadouts(state, launchX?) {
   readRocketHeight.textContent = formatNumber(Math.max(0, state.y), 1) + ' m';
   var origin = Number.isFinite(launchX) ? launchX : 0;
   readRocketRange.textContent = formatNumber(state.x - origin, 1) + ' m';
-  readRocketProp.textContent = formatNumber(state.mProp, 1) + ' / ' + formatNumber(state.mPropInitial, 1) + ' kg';
+  const fuelDigits = state.mPropInitial >= 10000 ? 0 : 1;
+  readRocketProp.textContent = formatNumber(state.mProp, fuelDigits) + ' / ' + formatNumber(state.mPropInitial, fuelDigits) + ' kg';
   readRocketImpulse.textContent = formatSI(state.totalImpulse) + 'N\u00B7s';
 
   // Extended live readouts
@@ -849,7 +857,8 @@ function updateRocketFuel(display: RocketDisplay) {
   const percent = display.fraction * 100;
   propGaugeOx.style.width = (percent * display.oxidiserFraction) + '%';
   propGaugeFuel.style.width = (percent * (1 - display.oxidiserFraction)) + '%';
-  readRocketProp.textContent = formatNumber(display.remaining, 1) + ' / ' + formatNumber(display.total, 1) + ' kg';
+  const fuelDigits = display.total >= 10000 ? 0 : 1;
+  readRocketProp.textContent = formatNumber(display.remaining, fuelDigits) + ' / ' + formatNumber(display.total, fuelDigits) + ' kg';
   gauge.setAttribute('aria-valuenow', percent.toFixed(1));
   gauge.setAttribute('aria-valuetext', Math.round(percent) + '% remaining; ' + display.label);
   const status = document.getElementById('read-rocket-engine')!;
@@ -922,8 +931,8 @@ function hidePostFlightSummary() {
 // ── SI formatting helper ───────────────────────────────────────────────────
 
 function formatSI(value) {
-  if (value >= 1e6) return (value / 1e6).toFixed(2) + ' M';
-  if (value >= 1e3) return (value / 1e3).toFixed(1) + ' k';
+  if (value >= 1e6) return formatNumber(value / 1e6, 2) + ' M';
+  if (value >= 1e3) return formatNumber(value / 1e3, 1) + ' k';
   return formatNumber(value, 1) + ' ';
 }
 

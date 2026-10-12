@@ -209,12 +209,15 @@
 <p class="settings-reset-note">Restore the starting rocket on your chosen world.</p>
 <div class="slider-group">
 <div class="slider-row">
-<div class="slider-label-row">
+<div class="slider-label-row force-label-row">
 <span class="slider-label">
-<label for="slider-rocket-propmass">Propellant load</label>
-<button type="button" class="tooltip-trigger" aria-label="About Propellant load" data-tip="&lt;b&gt;One more scoop?&lt;/b&gt;&lt;br&gt;More propellant lengthens the burn, but the engine has more mass to lift. Watch both the burn time and thrust-to-weight ratio.">?</button>
+<label for="slider-rocket-propmass">Propellant</label>
+<button type="button" class="tooltip-trigger" aria-label="About Propellant load" data-tip="&lt;b&gt;One more scoop?&lt;/b&gt;&lt;br&gt;Multiply the fuel load from ×1 to ×1,000. More fuel also means more weight: open the workshop and increase throat diameter or chamber pressure if the rocket cannot lift off.">?</button>
 </span>
-<output class="slider-value" id="val-rocket-propmass" for="slider-rocket-propmass">8 kg</output>
+<select id="rocket-propellant-multiplier" class="force-multiplier" aria-label="Propellant load multiplier" title="Multiply the propellant load">
+<option value="1">×1</option><option value="10">×10</option><option value="100">×100</option><option value="1000">×1,000</option>
+</select>
+<output class="slider-value" id="val-rocket-propmass" for="slider-rocket-propmass rocket-propellant-multiplier">8 kg</output>
 </div>
 <input type="range" id="slider-rocket-propmass" min="1" max="5000" value="8" step="1" aria-label="Propellant load">
 </div>
@@ -353,7 +356,7 @@
 </span>
 <output class="slider-value" id="val-rocket-dt" for="slider-rocket-dt">15 mm</output>
 </div>
-<input type="range" id="slider-rocket-dt" min="5" max="200" value="15" step="1" aria-label="Throat diameter">
+<input type="range" id="slider-rocket-dt" min="5" max="2000" value="15" step="1" aria-label="Throat diameter">
 </div>
 <div class="slider-row">
 <div class="slider-label-row">
