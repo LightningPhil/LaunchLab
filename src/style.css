@@ -114,8 +114,10 @@ button { touch-action: manipulation; }
 .slider-label-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .slider-label, .slider-row > label { font-size: 13px; font-weight: 550; display: flex; align-items: center; gap: 5px; }
 .slider-value { white-space: nowrap; font: 13px var(--font-mono); color: #386e56; font-weight: 600; font-variant-numeric: tabular-nums; }
-.force-multiplier { margin-left: auto; width: 64px; min-height: 32px; padding: 3px 4px; border: 1px solid #c7d2c8; border-radius: 7px; background: #f4f6ef; color: #386e56; font: 600 12px var(--font-mono); cursor: pointer; }
+.force-multiplier { margin-left: auto; flex: 0 0 74px; width: 74px; min-height: 32px; padding: 3px 4px; border: 1px solid #c7d2c8; border-radius: 7px; background: #f4f6ef; color: #386e56; font: 600 12px var(--font-mono); cursor: pointer; }
 .force-multiplier:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.force-label-row { gap: 4px; }
+.force-label-row .slider-value { font-size: 12px; }
 input[type='range'] { -webkit-appearance: none; appearance: none; width: 100%; height: 7px; margin: 7px 0; background: #e1e6d6; border: 1px solid #d9e0cc; border-radius: 9px; cursor: pointer; accent-color: var(--accent); }
 input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 21px; height: 21px; border: 3px solid #fcfcf3; border-radius: 50%; background: #397d65; box-shadow: 0 0 0 1px #a0b69f, 0 2px 3px #203c2b1a; }
 input[type='range']::-moz-range-thumb { width: 15px; height: 15px; border: 3px solid #fcfcf3; border-radius: 50%; background: #397d65; box-shadow: 0 0 0 1px #a0b69f; }

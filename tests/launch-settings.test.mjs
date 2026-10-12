@@ -46,7 +46,7 @@ test('cannon edits and resets cannot change the rocket or chosen world', () => {
 test('multiplied cannon force survives replay, legacy restoration and reset', () => {
   const h = controls();
   h.root.querySelector('#slider-force').max = '5000';
-  for (const multiple of [1, 10, 100]) {
+  for (const multiple of [1, 10, 100, 1000]) {
     for (const base of [50, 500, 5000]) {
       const force = base * multiple;
       applyLaunchSettings(h.root, 'cannon', { force, forceMultiplier: multiple });
@@ -58,9 +58,12 @@ test('multiplied cannon force survives replay, legacy restoration and reset', ()
   }
   applyLaunchSettings(h.root, 'cannon', { force: 500000 });
   assert.equal(h.value('#slider-force'), '5000'); assert.equal(h.value('#force-multiplier'), '100');
+  applyLaunchSettings(h.root, 'cannon', { force: 5000000 });
+  assert.equal(h.value('#slider-force'), '5000'); assert.equal(h.value('#force-multiplier'), '1000');
   applyLaunchSettings(h.root, 'cannon', CANNON_DEFAULTS);
   assert.equal(h.value('#slider-force'), '500'); assert.equal(h.value('#force-multiplier'), '1');
   assert.equal(formatNumber(500000), '500,000');
+  assert.equal(formatNumber(5000000), '5,000,000');
   assert.equal(formatNumber(-1234567.8, 1), '-1,234,567.8');
 });
 

@@ -137,7 +137,7 @@ test('long cannon framing keeps the curved landing and launch visible on phones 
     const fraction = index / 100;
     return { x: radius * .7 * fraction, y: radius * .2 * 4 * fraction * (1 - fraction) };
   });
-  for (const [width, height] of [[960, 540], [320, 260], [640, 180]]) {
+  for (const [width, height] of [[960, 540], [320, 405], [320, 260], [640, 180]]) {
     h.bounds.width = width; h.bounds.height = height; h.resizeLayout();
     Renderer.resetCamera(); Renderer.setCannonCamera(path, radius);
     Renderer.setFlightFocus(path.at(-1));
@@ -149,6 +149,53 @@ test('long cannon framing keeps the curved landing and launch visible on phones 
     }
   }
   Renderer.resetCamera(); Renderer.setTargetGravity(9.81);
+});
+
+test('escaping cannon shots keep the entire world and outgoing path visible at every viewport size', () => {
+  const h = harness(), radius = 1737400;
+  Renderer.setTargetGravity(1.62);
+  const path = Array.from({ length: 101 }, (_, i) => ({ x: radius * .8 * i / 100, y: radius * 2 * i / 100 }));
+  const globe = Array.from({ length: 32 }, (_, i) => ({ x: radius * Math.PI * 2 * i / 32, y: 0 }));
+  for (const [width, height] of [[960, 540], [320, 405], [320, 260], [640, 180]]) {
+    h.bounds.width = width; h.bounds.height = height; h.resizeLayout();
+    Renderer.resetCamera(); Renderer.setCannonCamera(path, radius);
+    Renderer.setFlightFocus(path.at(-1));
+    Renderer.updateWorld(30); Renderer.updateWorld(30);
+    for (const point of [...path, ...globe]) {
+      const pixel = Renderer.toCanvas(point.x, point.y);
+      assert.ok(pixel.x >= 0 && pixel.x <= width && pixel.y >= 0 && pixel.y <= height,
+        `${width}×${height}: ${pixel.x}, ${pixel.y}`);
+      if (height >= 300) assert.ok(pixel.y > 132, 'The shot clears the portrait and speech bubble');
+    }
+  }
+  Renderer.resetCamera(); Renderer.setTargetGravity(9.81);
+});
+
+test('planetary cannon zoom settles in viewing time even with one frame per second', () => {
+  harness();
+  const radius = 6371000, launch = { x: 4, y: 4 }, peak = { x: radius * 1.3, y: radius * 3.5 };
+  const landing = { x: radius * 2.6, y: 0 };
+  Renderer.setViewTransitionDuration(2);
+  Renderer.setFlightFocus(launch);
+  Renderer.setCannonCamera([launch, peak, landing], radius);
+  for (let frame = 0; frame < 5; frame++) {
+    Renderer.setFlightFocus(peak); Renderer.updateWorld(1);
+  }
+  for (const point of [launch, peak, landing, { x: Math.PI * radius, y: 0 }]) {
+    const pixel = Renderer.toCanvas(point.x, point.y);
+    assert.ok(pixel.x >= 0 && pixel.x <= 960 && pixel.y >= 0 && pixel.y <= 540,
+      `A dropped-frame camera still frames the world: ${pixel.x}, ${pixel.y}`);
+  }
+  Renderer.resetCamera();
+});
+
+test('the cannon trail stays legible when a bright Earth sky fades to dark space', () => {
+  const h = harness();
+  Renderer.drawTrajectoryDot(5, 2);
+  assert.equal(h.context.fillStyle, 'rgba(60,20,10,0.6)');
+  Renderer.setZoomImmediate(.00001); Renderer.updateWorld(0);
+  Renderer.drawTrajectoryDot(6371000, 6371000);
+  assert.equal(h.context.fillStyle, 'rgba(255,230,120,0.6)');
 });
 
 test('sky covers the space exposed below a curved horizon on compact scenes', () => {

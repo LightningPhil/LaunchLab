@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PlaybackClock, automaticRate, MAX_AUTO_VIEW_SECONDS } from '../src/playback.ts';
-import { MIN_CANNON_PATH_POINTS, PHYSICS_STEP, recordFlight, sampleFlight, compatibleRuns } from '../src/flight.ts';
+import { MAX_RECORD_TIME, MIN_CANNON_PATH_POINTS, PHYSICS_STEP, recordFlight, sampleFlight, compatibleRuns } from '../src/flight.ts';
 import { Physics } from '../src/physics.ts';
 import { RocketPhysics } from '../src/rocket_physics.ts';
 import { resolveEnvironment } from '../src/environment.ts';
@@ -271,7 +271,11 @@ test('safe orbit and outward escape produce bounded observation records without 
     const initial = Physics.createProjectile(0,altitude,speed,angle,1,radius);
     const run = await recordFlight('cannon',{gravity:9.81,planetRadius:radius,environment},initial);
     assert.equal(run.outcome,outcome);
-    assert.ok(run.duration >= 20 && run.duration < 21);
+    if (outcome === 'orbit') assert.ok(run.duration >= 20 && run.duration < 21);
+    else {
+      assert.ok(run.duration > 20 && run.duration < MAX_RECORD_TIME);
+      assert.ok(run.samples.at(-1).y >= radius * 2, 'Watch the escape clear the world');
+    }
     const event = run.events.find(event => event.kind === outcome);
     assert.ok(event);
     assert.ok(run.samples.some(sample => sample.time === event.time));

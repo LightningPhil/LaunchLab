@@ -1428,7 +1428,10 @@ function loop(timestamp) {
   }
   // Update renderer world (environment blend + zoom animation), then frame the
   // current rocket projection before anything is painted.
-  Renderer.updateWorld(dt);
+  // Camera easing must use the same elapsed viewing time as playback. Capping
+  // it to the particle timestep strands the camera close to the launch site
+  // on low-frame-rate tablets while Auto advances hours of recorded flight.
+  Renderer.updateWorld(elapsed);
   zoomControls.update(viewActive ? deck.run : null,
     { x: currentMode === 'rocket' ? Renderer.TOWER_BASE_X_M : Renderer.CANNON_BASE_X_M, y: 0 });
 

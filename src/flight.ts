@@ -96,12 +96,20 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
         eventTimes.add(state.time); run.samples.push({ ...state });
       }
     }
-    if (classifiedAt !== null && state.time >= classifiedAt + 20) { run.outcome = classification; break; }
+    // A few seconds barely clear the launch site on a planetary-scale escape.
+    // Follow it out to three body radii from the centre, then let Auto compress
+    // that physical journey into the same short, inspectable viewing session.
+    const escapeVisible = classification !== 'escape' || state.y >= 2 * state.planetRadius;
+    if (classifiedAt !== null && state.time >= classifiedAt + 20 && escapeVisible) { run.outcome = classification; break; }
     if (performance.now() >= deadline) {
       await new Promise(resolve => setTimeout(resolve, 0)); deadline = performance.now() + 8;
     }
   }
   if (signal?.aborted) throw new DOMException('Flight cancelled', 'AbortError');
+  // The observation cap may stop a very slow escape first. Its known physical
+  // outcome remains escape; the end event still explains why recording stops.
+  const observationLimit = run.outcome === 'limit';
+  if (observationLimit && classification) run.outcome = classification;
   run.duration = state.time;
   run.samples.push({ ...state });
   // The final state wins equal timestamps, especially a rejected ignition at t=0.
@@ -119,7 +127,7 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
   for (const event of run.events) {
     if (event.kind === 'apex' && event.time !== state.apexTime) event.label = 'Local high point';
   }
-  addEvent(run.duration, 'end', run.outcome === 'limit' ? 'Observation limit' : 'Result');
+  addEvent(run.duration, 'end', observationLimit ? 'Observation limit' : 'Result');
   run.events.sort((a, b) => a.time - b.time);
   return run;
 }

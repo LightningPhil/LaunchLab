@@ -418,11 +418,19 @@ function setCannonCamera(points: readonly SurfacePoint[], radius: number) {
   const projected = points.map(point => surfacePosition(point.x, point.y, radius));
   // At local scales the familiar launch-field framing remains sufficient.
   if (!projected.some(point => Math.hypot(point.x, point.y) > radius * .015)) return;
-  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+  let minX = 0, maxX = 0, minY = 0, maxY = 0, extent = 0;
   for (const point of projected) {
     minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
     minY = Math.min(minY, point.y); maxY = Math.max(maxY, point.y);
+    extent = Math.max(extent, Math.hypot(point.x, point.y));
   }
+  // Reveal the world as context for large shots, just as for rockets. Without
+  // this, an outgoing path above the launch site leaves most of its world
+  // cropped below the canvas even once the camera is far enough away.
+  const progress = clamp((extent / radius - .5) / .75, 0, 1);
+  const reveal = progress * progress * (3 - 2 * progress);
+  minX = Math.min(minX, -radius * reveal); maxX = Math.max(maxX, radius * reveal);
+  minY = Math.min(minY, -2 * radius * reveal);
   // Leave visible ground beneath both ends of the arc, even where it has
   // fallen below the launch tangent. Altitude alone cannot frame this view.
   minY -= Math.max((maxX - minX) * .07, (maxY - minY) * .08);
@@ -432,7 +440,10 @@ function setCannonCamera(points: readonly SurfacePoint[], radius: number) {
 }
 function cannonCameraFrame() {
   const bounds = cannonBounds!;
-  const left = 22, right = cannonSceneWidth(W, H) - 22, top = cannonSceneTop(W, H) + 22, bottom = H - 22;
+  // Large shots must stay below the portrait/caption on normal-height scenes.
+  // Short landscape scenes already reserve its column through cannonSceneWidth.
+  const left = 22, right = cannonSceneWidth(W, H) - 22;
+  const top = Math.max(cannonSceneTop(W, H), H >= 300 ? 132 : 0) + 22, bottom = H - 22;
   const ppm = Math.max(MIN_PPM, Math.min(DEFAULT_PPM, (right - left) / ((bounds.maxX - bounds.minX) * 1.15),
     (bottom - top) / ((bounds.maxY - bounds.minY) * 1.15)));
   return { ppm, left, right, top, bottom,
@@ -1729,9 +1740,11 @@ function drawLandedBall(physX) { drawBall(physX, 0.02, 1.0, 0.7); }
 
 // ── Trajectory Dots ────────────────────────────────────────────────────────
 function getTrailColour() {
-  // Pick a colour that contrasts the sky midpoint
+  // Contrast the visible sky, including its fade to space on distant views.
   var sm = env.skyMid;
   var lum = sm[0]*0.299 + sm[1]*0.587 + sm[2]*0.114;
+  const spaceFrac = curveActive ? clamp(1 - curveRadiusPx / (H * 2), 0, 1) : 0;
+  lum = lum * (1 - spaceFrac) + 18 * spaceFrac;
   if (lum > 140) {
     // Light sky → dark warm trail
     return [60, 20, 10];

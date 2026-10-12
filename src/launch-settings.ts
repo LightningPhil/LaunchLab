@@ -33,8 +33,9 @@ export function applyLaunchSettings(root: Pick<Document, 'querySelector'>, mode:
   if (mode === 'cannon' && Number.isFinite(config.force)) {
     // Record the effective force; restore its multiplier before setting the
     // base slider so replay never clamps a large experiment to 5,000 N.
-    const valid = (multiple: number) => [1, 10, 100].includes(multiple) && config.force / multiple >= 50 && config.force / multiple <= 5000;
-    const multiple = valid(config.forceMultiplier) ? config.forceMultiplier : [1, 10, 100].find(valid) ?? 100;
+    const multipliers = [1, 10, 100, 1000];
+    const valid = (multiple: number) => multipliers.includes(multiple) && config.force / multiple >= 50 && config.force / multiple <= 5000;
+    const multiple = valid(config.forceMultiplier) ? config.forceMultiplier : multipliers.find(valid) ?? 1000;
     root.querySelector<HTMLSelectElement>('#force-multiplier')!.value = String(multiple);
     root.querySelector<HTMLInputElement>('#slider-force')!.value = String(config.force / multiple);
   }
