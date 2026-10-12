@@ -207,16 +207,42 @@ test('sky covers the space exposed below a curved horizon on compact scenes', ()
     'The first sky layer fills beneath both sides of the arc, before ground painting');
 });
 
-test('manual inspection paints the far hemisphere as ground even at close zoom', () => {
+test('manual inspection draws a local ground curve on the far hemisphere at close zoom', () => {
   const h = harness(), radius = 6371000;
   Renderer.setManualZoom(true);
   Renderer.centreView(Renderer.toCanvas(Math.PI * radius, 0)); Renderer.updateWorld(0);
   const location = Renderer.toCanvas(Math.PI * radius, 0);
   assert.ok(Math.abs(location.x - 480) < 1e-6 && Math.abs(location.y - 270) < 1e-6);
   h.calls.length = 0; Renderer.drawWorld();
-  assert.ok(h.calls.some(call => call.name === 'arc' && call.args[2] === radius * 80),
-    'The underside uses the same physical circle instead of the launch tangent');
+  assert.ok(h.calls.some(call => call.name === 'quadraticCurveTo'),
+    'The underside draws the visible section of the physical circle');
+  assert.ok(!h.calls.some(call => call.name === 'arc' && call.args[2] === radius * 80),
+    'Sending the entire enormous circle to Canvas produces blocky ground fills');
   Renderer.resetCamera();
+});
+
+test('solid and gas landing close-ups keep ground paths and gradients within local coordinates', () => {
+  for (const world of ENVIRONMENTS.filter(world => ['earth', 'jupiter'].includes(world.name))) {
+    for (const dpr of [1, 1.5, 2, 3]) {
+      const h = harness();
+      window.devicePixelRatio = dpr; Renderer.clear();
+      Renderer.setTargetGravity(world.gravity); Renderer.updateWorld(10);
+      const radius = world.radius;
+      Renderer.setZoomImmediate(800); Renderer.updateWorld(0);
+      Renderer.setManualZoom(true);
+      Renderer.centreView(Renderer.toCanvas(radius * 2.9, 0)); Renderer.updateWorld(0);
+      const gradients = [];
+      h.context.createRadialGradient = (...args) => { gradients.push(args); return { addColorStop() {} }; };
+      h.context.createLinearGradient = (...args) => { gradients.push(args); return { addColorStop() {} }; };
+      h.calls.length = 0; Renderer.drawWorld();
+      const segments = h.calls.filter(call => call.name === 'quadraticCurveTo');
+      assert.ok(segments.length > 0);
+      assert.ok(segments.every(call => call.args.every(value => Math.abs(value) < 10000)), 'No giant curve controls');
+      assert.ok(gradients.every(args => args.every(value => Math.abs(value) < 10000)), 'No giant gradient coordinates');
+      assert.ok(!h.calls.some(call => call.name === 'arc' && call.args[2] > 10000), 'No giant ground circles');
+      Renderer.resetCamera();
+    }
+  }
 });
 
 test('rocket points along commanded thrust and plume begins behind its nozzle', () => {

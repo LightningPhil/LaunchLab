@@ -11,6 +11,7 @@ import { ENVIRONMENTS, resolveEnvironment } from './environment.ts';
 import { surfacePosition, type SurfacePoint } from './spherical-world.ts';
 import { worldGlobe } from './world-globe.ts';
 import { InspectionCamera } from './inspection-camera.ts';
+import { localHorizon, horizonPoint, traceLocalDisc, type LocalHorizon } from './local-horizon.ts';
 
 /**
  * ============================================================================
@@ -1405,6 +1406,68 @@ function drawGround() {
   if (env.solidness < 0.99) drawGasGround(1 - env.solidness);
 }
 
+// Canvas circle/gradient precision breaks down at very large radii, even when
+// clipped to the viewport. Keep the ground fill AND its layers near the camera.
+function drawLocalGround(gas: boolean) {
+  const h = localHorizon(curveCentreX, curveCentreY, curveRadiusPx, W, H);
+  if (h.offset > h.extent / 2 + 12) return;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+  const zr = Math.min(1, currentPPM / DEFAULT_PPM);
+  const depth = Math.max(8, 40 * zr);
+  // A bounded gradient along the local radial direction. At this scale the
+  // deep radial shading is effectively linear across the visible section.
+  const gradient = ctx.createLinearGradient(
+    h.middle.x + h.normal.x * h.extent / 2, h.middle.y + h.normal.y * h.extent / 2,
+    h.middle.x - h.normal.x * h.extent / 2, h.middle.y - h.normal.y * h.extent / 2);
+  for (let i = 0; i <= 8; i++) {
+    const inward = -h.offset + (i / 8 - .5) * h.extent;
+    const fraction = gas ? clamp(1 - inward / (h.radius * .3), 0, 1)
+      : clamp((h.radius * .15 - inward) / (h.radius * .13), 0, 1);
+    const colour = gas ? (fraction < .5 ? lerpRGB(env.subBot, env.groundBot, fraction * 2)
+      : lerpRGB(env.groundBot, env.groundTop, fraction * 2 - 1))
+      : lerpRGB(env.subBot, env.subTop, fraction);
+    gradient.addColorStop(i / 8, rgb(colour));
+  }
+  ctx.fillStyle = gradient;
+  ctx.beginPath(); traceLocalDisc(ctx, h); ctx.fill();
+
+  if (Math.abs(h.offset) <= h.extent / 2 + depth + 12) {
+    if (!gas) {
+      const surface = ctx.createLinearGradient(h.surface.x, h.surface.y,
+        h.surface.x - h.normal.x * depth, h.surface.y - h.normal.y * depth);
+      surface.addColorStop(0, rgb(env.groundTop)); surface.addColorStop(1, rgb(env.groundBot));
+      ctx.fillStyle = surface;
+      ctx.beginPath(); traceLocalDisc(ctx, h); traceLocalDisc(ctx, h, depth); ctx.fill('evenodd');
+    }
+    drawLocalGroundEdge(h, gas, zr);
+  }
+  ctx.restore();
+}
+
+function drawLocalGroundEdge(h: LocalHorizon, gas: boolean, zr: number) {
+  const step = gas ? 8 : 10;
+  const count = Math.ceil(2 * h.extent / step);
+  const phase = parallaxOffset(PARALLAX_GROUND);
+  ctx.fillStyle = rgb(env.surfEdge);
+  ctx.beginPath();
+  for (let i = 0; i <= count; i++) {
+    const along = -h.extent + i * 2 * h.extent / count;
+    const wx = along + phase;
+    const ripple = gas ? Math.sin(wx * .03 + worldTime * 1.8) * 5
+      + Math.sin(wx * .07 + worldTime * 1.3) * 3 + Math.sin(wx * .15 + worldTime * 2.5) * 2
+      : zr * (3 * Math.sin(wx * .05) + 2 * Math.sin(wx * .13));
+    const p = horizonPoint(h, along, -ripple);
+    if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  // Close the decorative edge on the INSIDE of the surface, on every hemisphere.
+  for (let i = count; i >= 0; i--) {
+    const p = horizonPoint(h, -h.extent + i * 2 * h.extent / count, gas ? 12 : Math.max(2, 6 * zr));
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath(); ctx.fill();
+}
+
 function drawSolidGround(alpha) {
   ctx.globalAlpha = alpha;
   var zr = Math.min(1, currentPPM / DEFAULT_PPM);
@@ -1413,6 +1476,9 @@ function drawSolidGround(alpha) {
   var edgeAmp2 = 2 * zr;
 
   if (curveActive) {
+    if (curveRadiusPx > 16 * (Math.hypot(W, H) + 32)) {
+      drawLocalGround(false); ctx.globalAlpha = 1; return;
+    }
     // ── Curved ground: planet disc with concentric layers ──
     ctx.save();
     ctx.beginPath();
@@ -1514,6 +1580,9 @@ function drawGasGround(alpha) {
   ctx.globalAlpha = alpha;
 
   if (curveActive) {
+    if (curveRadiusPx > 16 * (Math.hypot(W, H) + 32)) {
+      drawLocalGround(true); ctx.globalAlpha = 1; return;
+    }
     // ── Curved gas ground: planet disc with radial gradient ──
     ctx.save();
     ctx.beginPath();

@@ -23,6 +23,8 @@ The launch view previously always projected the 512-wide map onto a fixed 640-pi
 
 `tools/world-texture-sources.json` records exact source URLs, native dimensions, credits and SHA-256 checksums. Re-export with Pillow using `python tools/prepare-orrery-textures.py CACHE_DIRECTORY --download`. Only GLB image extraction, downsampling and WebP encoding happen in this script. The earlier 1774×887 generated illustrations and their upsampled 2K variants have been replaced; `tools/orrery-texture-sources.json` preserves their historical prompts.
 
+At close zoom, the physical disc can have a screen radius of billions of pixels. Canvas loses precision when filling such a large circle, producing stair steps even with vector outlines. Ground fills, surface bands and shading therefore use a viewport-local tangent frame above 16 viewport diagonals. Short quadratic curves follow the exact circular sagitta with subpixel error; all coordinates sent to Canvas stay near the viewport. This includes sideways and upside-down landing sites, and both solid and gas worlds. The normal circle and globe artwork remain in use at wider views.
+
 ## Satellite motion
 
 Moon, Ganymede and Charon use representative circular orbits with measured mean distances and periods from [JPL satellite mean elements](https://ssd.jpl.nasa.gov/sats/elem/) and diameters from [JPL physical parameters](https://ssd.jpl.nasa.gov/sats/phys_par/). Phases and orbital planes are illustrative; these are not date-accurate satellite ephemerides. Their surfaces rotate synchronously with the representative orbit. Normalised planet lanes reserve the complete moon system's footprint to retain clear gaps.
