@@ -20,7 +20,7 @@ function assertLauncherFits(width, height, ppm, length, angle, topInset = 0) {
 
 test('full cannon control range fits on phone and short desktop canvases', () => {
   for (const [width, height] of viewports) {
-    for (let tenth = 5; tenth <= 50; tenth++) {
+    for (let tenth = 10; tenth <= 100; tenth++) {
       const length = tenth / 10;
       for (let angle = 5; angle <= 85; angle += 5) {
         const ppm = cannonSetupZoom({ width, height, lengths: [length], angles: [angle] });
@@ -33,7 +33,7 @@ test('full cannon control range fits on phone and short desktop canvases', () =>
 
 test('short phone fields keep the full setup below the character caption at every control limit', () => {
   for (const [width,height] of [[320,231],[375,220],[600,180]]) {
-    for (const length of [.5,2,5]) {
+    for (const length of [1,2,5,10]) {
       for (let angle=5;angle<=85;angle+=5) {
         const ppm=cannonSetupZoom({width,height,lengths:[length],angles:[angle],topInset:88});
         assertLauncherFits(width,height,ppm,length,angle,88);
@@ -45,7 +45,7 @@ test('short phone fields keep the full setup below the character caption at ever
 test('short landscape screens keep a useful launcher clear of the portrait column', () => {
   for (const [width,height] of [[480,136],[568,136],[844,205]]) {
     const fieldWidth=cannonSceneWidth(width,height),topInset=cannonSceneTop(width,height);
-    for (const length of [.5,2,5]) {
+    for (const length of [1,2,5,10]) {
       for (let angle=5;angle<=85;angle+=5) {
         const ppm=cannonSetupZoom({width:fieldWidth,height,lengths:[length],angles:[angle],topInset});
         assertLauncherFits(fieldWidth,height,ppm,length,angle,topInset);
@@ -56,8 +56,8 @@ test('short landscape screens keep a useful launcher clear of the portrait colum
 
 test('rebuild framing fits every intermediate length and lowered/raised pose', () => {
   for (const [width, height] of viewports) {
-    const ppm = cannonSetupZoom({ width, height, lengths: [.5, 3, 5], angles: [20, 45, 85], rebuilding: true });
-    for (const length of [.5, 2, 3.5, 5]) {
+    const ppm = cannonSetupZoom({ width, height, lengths: [1, 3, 10], angles: [20, 45, 85], rebuilding: true });
+    for (const length of [1, 2, 3.5, 5, 7.5, 10]) {
       for (let angle = 0; angle <= 85; angle += 5) assertLauncherFits(width, height, ppm, length, angle);
     }
   }

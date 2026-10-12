@@ -5,18 +5,17 @@ import { Physics } from '../src/physics.ts';
 import { recordFlight, sampleFlight, MAX_RECORD_TIME } from '../src/flight.ts';
 import { PlaybackClock, MAX_AUTO_VIEW_SECONDS } from '../src/playback.ts';
 
-function launch(environment, force = 5000000) {
-  const config = { force, forceMultiplier: 1000, angle: 45, mass: .5, barrelLength: 5,
+function launch(environment, force = 10000000, mass = .1, barrelLength = 10) {
+  const config = { force, forceMultiplier: 1000, angle: 45, mass, barrelLength,
     gravity: environment.gravity, planetRadius: environment.radius, environment };
   const speed = Physics.computeLaunchVelocity(force, config.mass, config.barrelLength);
-  return recordFlight('cannon', config, Physics.createProjectile(0, 5, speed, 45, .5, environment.radius));
+  return recordFlight('cannon', config, Physics.createProjectile(0, 1 + barrelLength * Math.SQRT1_2, speed, 45, mass, environment.radius));
 }
 
 test('maximum ×1,000 shots on every world remain finite and playable in Auto', async () => {
-  const escaping = ['pluto', 'ganymede', 'moon', 'mercury', 'mars'];
   for (const environment of ENVIRONMENTS) {
     const run = await launch(environment), final = run.samples.at(-1);
-    const expected = escaping.includes(environment.name) ? 'escape' : environment.name === 'venus' ? 'limit' : 'impact';
+    const expected = ['jupiter', 'sun'].includes(environment.name) ? 'impact' : 'escape';
     assert.equal(run.outcome, expected, environment.name);
     assert.ok(run.duration > 0 && run.duration <= MAX_RECORD_TIME);
     assert.ok(run.samples.length <= 16010, 'Long flights retain bounded sample storage');
@@ -46,10 +45,8 @@ test('maximum ×1,000 shots on every world remain finite and playable in Auto', 
     }
     assert.equal(clock.time, run.duration, `${environment.name}: Auto reaches the recorded endpoint`);
     assert.ok(wall <= MAX_AUTO_VIEW_SECONDS + 1 / 60);
-    if (environment.name === 'earth') {
-      assert.ok(run.maxHeight > 20000000, 'Nearly escaping Earth reveals the whole world');
-      assert.ok(peakRate > 1000, 'Auto is not limited to the manual 64× choices');
-    }
+    if (environment.name === 'earth') assert.ok(Math.hypot(run.samples[0].vx, run.samples[0].vy) > 44000);
+    if (environment.name === 'saturn') assert.ok(peakRate > 200, 'Auto still exceeds the manual 64× choices');
     // Pausing and manual inspection remain exact even after a fast Auto run.
     clock.seek(run.duration * .4, run.duration);
     const inspected = sampleFlight(run, clock.time);
@@ -61,9 +58,18 @@ test('maximum ×1,000 shots on every world remain finite and playable in Auto', 
   }
 });
 
+test('the earlier nearly escaping Earth shot remains playable at over 1,000×', async () => {
+  const earth = ENVIRONMENTS.find(e => e.name === 'earth');
+  const run = await launch(earth, 5000000, .5, 5);
+  assert.equal(run.outcome, 'impact');
+  assert.ok(run.maxHeight > 20000000);
+  const clock = new PlaybackClock(); clock.load(run); clock.advance(MAX_AUTO_VIEW_SECONDS, run);
+  assert.equal(clock.time, run.duration); assert.ok(clock.rate > 1000);
+});
+
 test('a near-escape Moon shot ends at the observation cap without inventing a landing', async () => {
   const moon = ENVIRONMENTS.find(e => e.name === 'moon');
-  const run = await launch(moon, 280000);
+  const run = await launch(moon, 280000, .5, 5);
   assert.equal(run.outcome, 'limit');
   assert.equal(run.duration, MAX_RECORD_TIME);
   assert.ok(run.maxHeight > moon.radius * 5);

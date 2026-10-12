@@ -79,7 +79,7 @@ test('screen coordinates invert flat and spherical projection, including planet 
 
 test('cannon muzzle follows the full barrel-length range used by launch physics', () => {
   harness();
-  for (const length of [.5, 2, 4, 5]) {
+  for (const length of [1, 2, 4, 5, 10]) {
     Renderer.setBarrelLength(length);
     for (const angle of [5, 45, 85]) {
       const tip = Renderer.getCannonTipPhys(angle);

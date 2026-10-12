@@ -137,7 +137,7 @@ var PARALLAX_TREES      = 0.5;    // Treeline (mid-ground)
 var PARALLAX_GROUND     = 1.0;    // Ground surface features (crater fields etc.)
 
 function setBarrelLength(m) {
-  BARREL_LENGTH_M = Math.max(0.4, Math.min(5.0, m));
+  BARREL_LENGTH_M = Math.max(0.4, Math.min(10.0, m));
 }
 
 // ── State ──────────────────────────────────────────────────────────────────

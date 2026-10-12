@@ -25,6 +25,9 @@ function controls() {
       : id === '#rocket-guidance' ? { value:'fixed' } : new Range());
     return nodes.get(id);
   } };
+  for (const [id, min, max] of [['force', 100, 10000], ['mass', .1, 10], ['barrel', 1, 10]]) {
+    const input = root.querySelector('#slider-' + id); input.min = String(min); input.max = String(max);
+  }
   applyLaunchSettings(root, 'cannon', CANNON_DEFAULTS);
   applyLaunchSettings(root, 'rocket', ROCKET_DEFAULTS);
   return { root, nodes, value: id => root.querySelector(id).value };
@@ -34,7 +37,7 @@ test('cannon edits and resets cannot change the rocket or chosen world', () => {
   const h = controls();
   const rocket = [...h.nodes].filter(([id]) => id.includes('rocket')).map(([id, node]) => [id,node.value]);
   const world = resolveEnvironment(9.81);
-  applyLaunchSettings(h.root, 'cannon', { angle:5, mass:20, force:5000, barrelLength:5, gravity:274 });
+  applyLaunchSettings(h.root, 'cannon', { angle:5, mass:10, force:10000, barrelLength:10, gravity:274 });
   applyLaunchSettings(h.root, 'cannon', CANNON_DEFAULTS);
   assert.deepEqual(rocket, [...h.nodes].filter(([id]) => id.includes('rocket')).map(([id,node]) => [id,node.value]));
   assert.equal(world.name, 'earth');
@@ -45,9 +48,8 @@ test('cannon edits and resets cannot change the rocket or chosen world', () => {
 
 test('multiplied cannon force survives replay, legacy restoration and reset', () => {
   const h = controls();
-  h.root.querySelector('#slider-force').max = '5000';
   for (const multiple of [1, 10, 100, 1000]) {
-    for (const base of [50, 500, 5000]) {
+    for (const base of [100, 500, 10000]) {
       const force = base * multiple;
       applyLaunchSettings(h.root, 'cannon', { force, forceMultiplier: multiple });
       assert.equal(Number(h.value('#slider-force')), base);
@@ -60,16 +62,19 @@ test('multiplied cannon force survives replay, legacy restoration and reset', ()
   assert.equal(h.value('#slider-force'), '5000'); assert.equal(h.value('#force-multiplier'), '100');
   applyLaunchSettings(h.root, 'cannon', { force: 5000000 });
   assert.equal(h.value('#slider-force'), '5000'); assert.equal(h.value('#force-multiplier'), '1000');
+  applyLaunchSettings(h.root, 'cannon', { force: 10000000, mass: .1, barrelLength: 10 });
+  assert.equal(h.value('#slider-force'), '10000'); assert.equal(h.value('#force-multiplier'), '1000');
+  assert.equal(h.value('#slider-mass'), '0.1'); assert.equal(h.value('#slider-barrel'), '10');
   applyLaunchSettings(h.root, 'cannon', CANNON_DEFAULTS);
   assert.equal(h.value('#slider-force'), '500'); assert.equal(h.value('#force-multiplier'), '1');
   assert.equal(formatNumber(500000), '500,000');
-  assert.equal(formatNumber(5000000), '5,000,000');
+  assert.equal(formatNumber(10000000), '10,000,000');
   assert.equal(formatNumber(-1234567.8, 1), '-1,234,567.8');
 });
 
 test('rocket reset restores hidden workshop and guidance settings without changing the cannon', () => {
   const h = controls();
-  applyLaunchSettings(h.root, 'cannon', { angle:7, mass:19, force:90, barrelLength:.5 });
+  applyLaunchSettings(h.root, 'cannon', { angle:7, mass:9, force:100, barrelLength:1 });
   applyLaunchSettings(h.root, 'rocket', { ...ROCKET_DEFAULTS, propellantId:'LOX_LH2', MR:6.2,
     dryMass:5000, propMass:4000, launchAngle:5, Pc_bar:10, throatDia_mm:5,
     epsilon:200, etaC:.8, etaN:.8, guidanceMode:'pitch_program', pitchEnd:0, pitchT1:0, pitchT2:1, progradeVmin:100 });
@@ -83,7 +88,7 @@ test('rocket reset restores hidden workshop and guidance settings without changi
   assert.equal(h.value('#slider-rocket-pitch-t2'), '20');
   assert.equal(h.value('#slider-rocket-prograde-vmin'), '10');
   assert.equal(h.value('#slider-angle'), '7');
-  assert.equal(h.value('#slider-mass'), '19');
+  assert.equal(h.value('#slider-mass'), '9');
 });
 
 test('switching propellant selects its useful mixture default before native range clamping', () => {
@@ -113,7 +118,7 @@ test('reset rocket takes off on all planetary presets, while the Sun still defea
 
 test('default Earth recordings still fly and land after extreme cannon experiments', async () => {
   const environment = resolveEnvironment(9.81);
-  const extreme = { angle:85, mass:20, force:5000, barrelLength:5, gravity:9.81, planetRadius:environment.radius, environment };
+  const extreme = { angle:85, mass:.1, force:10000000, barrelLength:10, gravity:9.81, planetRadius:environment.radius, environment };
   await recordFlight('cannon', extreme, Physics.createProjectile(2,1,
     Physics.computeLaunchVelocity(extreme.force,extreme.mass,extreme.barrelLength), extreme.angle, extreme.mass, environment.radius));
   const config = { ...ROCKET_DEFAULTS, gravity:9.81, environment, planetRadius:environment.radius };

@@ -32,12 +32,14 @@ export function setMixtureBounds(input: HTMLInputElement, propellantId: string) 
 export function applyLaunchSettings(root: Pick<Document, 'querySelector'>, mode: 'cannon' | 'rocket', config: Record<string, any>) {
   if (mode === 'cannon' && Number.isFinite(config.force)) {
     // Record the effective force; restore its multiplier before setting the
-    // base slider so replay never clamps a large experiment to 5,000 N.
+    // base slider so replay never clamps a large experiment to its base range.
+    const forceSlider = root.querySelector<HTMLInputElement>('#slider-force')!;
     const multipliers = [1, 10, 100, 1000];
-    const valid = (multiple: number) => multipliers.includes(multiple) && config.force / multiple >= 50 && config.force / multiple <= 5000;
+    const valid = (multiple: number) => multipliers.includes(multiple) &&
+      config.force / multiple >= Number(forceSlider.min) && config.force / multiple <= Number(forceSlider.max);
     const multiple = valid(config.forceMultiplier) ? config.forceMultiplier : multipliers.find(valid) ?? 1000;
     root.querySelector<HTMLSelectElement>('#force-multiplier')!.value = String(multiple);
-    root.querySelector<HTMLInputElement>('#slider-force')!.value = String(config.force / multiple);
+    forceSlider.value = String(config.force / multiple);
   }
   if (mode === 'rocket') {
     const propellant = root.querySelector<HTMLSelectElement>('#rocket-propellant')!;
