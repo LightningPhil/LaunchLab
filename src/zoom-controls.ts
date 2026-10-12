@@ -43,12 +43,17 @@ export class ZoomControls {
     for (const button of this.panel.querySelectorAll<HTMLButtonElement>('[data-zoom]')) {
       button.onclick = () => this.zoom(button.dataset.zoom === 'in' ? 1.5 : 1 / 1.5, this.middle());
     }
-    canvas.addEventListener('wheel', event => {
+    const wheelZoom = (event: WheelEvent) => {
       if (!Renderer.isManualZoom()) return;
       event.preventDefault();
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1;
       this.zoom(Math.exp(-Math.max(-500, Math.min(500, event.deltaY * unit)) * .002), this.point(event));
-    }, { passive: false });
+    };
+    // The labels and controls sit above the canvas. Their wheel events do not
+    // reach it, so give every part of the zoom surface the same handler.
+    for (const target of [canvas, this.markers, this.panel]) {
+      target.addEventListener('wheel', wheelZoom, { passive: false });
+    }
     canvas.addEventListener('pointerdown', event => {
       if (!Renderer.isManualZoom() || event.button !== 0) return;
       event.preventDefault(); canvas.focus({ preventScroll: true });
