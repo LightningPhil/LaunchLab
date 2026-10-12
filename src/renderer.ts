@@ -8,7 +8,7 @@ import { drawGiantSquid, drawIceHole } from './squid.ts';
 import { drawIceBear } from './ice-bear.ts';
 import { cannonSceneTop, cannonSceneWidth, rocketCameraFraming, type RocketCameraRequest } from './camera.ts';
 import { ENVIRONMENTS, resolveEnvironment } from './environment.ts';
-import { surfacePosition, worldViewFrame, type SurfacePoint, type WorldView } from './spherical-world.ts';
+import { surfacePosition, type SurfacePoint } from './spherical-world.ts';
 import { worldGlobe } from './world-globe.ts';
 
 /**
@@ -150,33 +150,27 @@ var cameraY       = 0;     // world-space Y offset for vertical panning (metres)
 var targetCameraY = 0;
 var viewTransitionDuration = 1.2; // ~95% settle in ~1.2s by default
 var rocketCamera: RocketCameraRequest | null = null;
-var sceneView: WorldView = 'flight';
-var showGravityField = false;
-var sceneFocus: SurfacePoint = { x: 0, y: 0 };
-var sceneLaunchX = 0;
+var flightFocus: SurfacePoint = { x: 0, y: 0 };
 var cannonBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
+var cannonStart = { ppm: DEFAULT_PPM, x: 0, y: 0 };
 var displayedGravity = 9.81;
 var targetGravity    = 9.81;
 var worldTime = 0;
 var EARTH_PLANET = PLANETS.find(planet => planet.name === 'earth') || PLANETS[0];
 
-// ── Curvature state (Phase 2) ──────────────────────────────────────────────
-// Keep a cheap local tangent only while its error is below a fraction of a
-// pixel; the physical sphere takes over before curvature becomes visible.
+// Geometry always uses the sphere. Only ground painting uses a local tangent
+// while its error is below a fraction of a pixel.
 var curveActive    = false;   // Is curvature currently visible?
 var curveRadius    = 0;       // Planet radius in metres (0 = flat fallback)
 var curveRadiusPx  = 0;       // Planet radius in screen pixels (R * PPM)
-// Planet-centre screen position — used when curvature is active.
-// The "camera follow point" (cameraX, cameraY) maps to the screen anchor point,
-// and we compute planet-centre relative to that.
+// Screen origin of the launch tangent, retained separately from the centre to
+// avoid subtracting enormous pixel radii when viewing centimetres on a planet.
+var projectionOriginX = 0;
+var projectionOriginY = 0;
 var curveCentreX   = 0;       // screen px
 var curveCentreY   = 0;       // screen px
-var curveCamTheta  = 0;       // camera's angular position on the sphere (radians)
-
-// ── Phase 4: Whole-planet view ─────────────────────────────────────────────
-// planetViewFrac smoothly ramps from 0 (ground-level follow) to 1 (whole-planet
-// centred) as PPM drops below the threshold where the planet disc fits on screen.
-var planetViewFrac = 0;       // 0 = follow mode, 1 = planet-centred mode
+// Visual detail only: this never changes the projection or camera position.
+var planetViewFrac = 0;
 
 // Interpolated environment
 var env = {
@@ -396,8 +390,7 @@ function setTargetZoom(ppm) {
   if (!Number.isFinite(ppm)) return;
   targetPPM = Math.max(MIN_PPM, ppm);
 }
-function setSceneView(view: WorldView) { sceneView = view; }
-function setSceneFocus(point: SurfacePoint, launchX: number) { sceneFocus = point; sceneLaunchX = launchX; }
+function setFlightFocus(point: SurfacePoint) { flightFocus = point; }
 function setZoomImmediate(ppm) {
   if (!Number.isFinite(ppm)) return;
   ppm = Math.max(MIN_PPM, ppm);
@@ -426,6 +419,7 @@ function setCannonCamera(points: readonly SurfacePoint[], radius: number) {
   // fallen below the launch tangent. Altitude alone cannot frame this view.
   minY -= Math.max((maxX - minX) * .07, (maxY - minY) * .08);
   cannonBounds = { minX, maxX, minY, maxY };
+  cannonStart = { ppm: currentPPM, x: -cameraX * currentPPM, y: baseGroundY + cameraY * currentPPM };
   setTargetZoom(cannonCameraFrame().ppm);
 }
 function cannonCameraFrame() {
@@ -434,51 +428,48 @@ function cannonCameraFrame() {
   const ppm = Math.max(MIN_PPM, Math.min(DEFAULT_PPM, (right - left) / ((bounds.maxX - bounds.minX) * 1.15),
     (bottom - top) / ((bounds.maxY - bounds.minY) * 1.15)));
   return { ppm, left, right, top, bottom,
-    originX: (left + right) / 2 - (bounds.minX + bounds.maxX) / 2 * currentPPM,
-    originY: (top + bottom) / 2 + (bounds.minY + bounds.maxY) / 2 * currentPPM };
+    originX: (left + right) / 2 - (bounds.minX + bounds.maxX) / 2 * ppm,
+    originY: (top + bottom) / 2 + (bounds.minY + bounds.maxY) / 2 * ppm };
 }
 function applyCannonCamera() {
   if (!cannonBounds) return;
-  const framing = cannonCameraFrame(), focus = surfacePosition(sceneFocus.x, sceneFocus.y, curveRadius);
-  let x = framing.originX, y = framing.originY;
+  const framing = cannonCameraFrame(), focus = surfacePosition(flightFocus.x, flightFocus.y, curveRadius);
+  const zoomSpan = Math.log(cannonStart.ppm / framing.ppm);
+  const progress = Math.abs(zoomSpan) < .001 ? 1 : clamp(Math.log(cannonStart.ppm / currentPPM) / zoomSpan, 0, 1);
+  const blend = progress * progress * (3 - 2 * progress);
+  // Begin at the launch camera and pull back with the zoom, instead of
+  // immediately centring a planetary-scale path while still close to ground.
+  let x = cannonStart.x + (framing.originX - cannonStart.x) * blend;
+  let y = cannonStart.y + (framing.originY - cannonStart.y) * blend;
   x += clamp(x + focus.x * currentPPM, framing.left, framing.right) - (x + focus.x * currentPPM);
   y += clamp(y - focus.y * currentPPM, framing.top, framing.bottom) - (y - focus.y * currentPPM);
   cameraX = targetCameraX = -x / currentPPM;
   cameraY = targetCameraY = (y - baseGroundY) / currentPPM;
-  groundY = y; curveCentreX = x; curveCentreY = y + curveRadiusPx;
-  curveCamTheta = cameraX / curveRadius;
+  updateProjectionOrigin();
 }
 function setRocketCamera(request: RocketCameraRequest) {
   rocketCamera = request;
-  setTargetZoom(rocketCameraFraming(request, W, H, currentPPM, curveActive).targetPPM);
+  setTargetZoom(rocketCameraFraming(request, W, H, currentPPM).targetPPM);
 }
 
 /** Zoom anticipates the recorded path, while position follows its current
  * projection. Easing world-space offsets cannot keep up with accelerated time
- * or a seek, and stops working when a whole-planet view centres the planet.
- * Frame the actual vehicle after zoom/curvature update instead. The bounds
+ * or a seek. Frame the actual vehicle after the zoom update. The bounds
  * guard is usually idle; it covers seeks, resizing and rapid attitude changes. */
 function applyRocketCamera() {
   if (!rocketCamera) return;
-  var framing = rocketCameraFraming(rocketCamera, W, H, currentPPM, curveActive);
+  var framing = rocketCameraFraming(rocketCamera, W, H, currentPPM);
   if (currentPPM > framing.maxPPM) {
     currentPPM = framing.maxPPM;
     baseGroundY = H - Math.max(12, GROUND_OFFSET * Math.min(1, currentPPM / DEFAULT_PPM));
     updateCurvature();
-    framing = rocketCameraFraming(rocketCamera, W, H, currentPPM, curveActive);
+    framing = rocketCameraFraming(rocketCamera, W, H, currentPPM);
   }
-  var point = rocketCamera.state, anchor = framing.anchor;
+  var point = surfacePosition(rocketCamera.state.x, rocketCamera.state.y, curveRadius), anchor = framing.anchor;
   cameraX = point.x - anchor.x / currentPPM;
   cameraY = point.y + (anchor.y - baseGroundY) / currentPPM;
   targetCameraX = cameraX; targetCameraY = cameraY;
-  groundY = baseGroundY + cameraY * currentPPM;
-  if (curveActive) {
-    var angle = point.x / curveRadius;
-    var radialPixels = (curveRadius + point.y) * currentPPM;
-    curveCentreX = anchor.x - radialPixels * Math.sin(angle);
-    curveCentreY = anchor.y + radialPixels * Math.cos(angle);
-    curveCamTheta = cameraX / curveRadius;
-  }
+  updateProjectionOrigin();
 }
 function setViewTransitionDuration(seconds) {
   if (!isFinite(seconds)) return;
@@ -492,7 +483,7 @@ function updateWorld(dt) {
   var gDiff = targetGravity - displayedGravity;
   if (Math.abs(gDiff) < 0.01) displayedGravity = targetGravity;
   else displayedGravity += gDiff * Math.min(1, dt * 6);
-  if (sceneView === 'flight' && cannonBounds) targetPPM = cannonCameraFrame().ppm;
+  if (cannonBounds) targetPPM = cannonCameraFrame().ppm;
 
   // First-order response where "duration" means ~95% settle time.
   var easingRate = 3 / viewTransitionDuration;
@@ -527,15 +518,11 @@ function updateWorld(dt) {
   baseGroundY = H - Math.max(12, GROUND_OFFSET * zoomRatio);
   groundY = baseGroundY + cameraY * currentPPM;
 
-  // ── Phase 4: planet-view blend fraction ──
-  // As PPM drops toward the whole-planet threshold, planetViewFrac ramps 0→1.
-  // The ramp starts at 5× the whole-planet PPM (planet is ~50% of viewport diameter)
-  // and reaches 1 at 1× (full planet in viewport).
-  // Computed before updateCurvature() so the centre-blend uses the current value.
+  // Fade decorative surface detail as the same camera reveals the whole disc.
   var wpPPM = getWholePlanetPPM();
   if (wpPPM > 0) {
-    var rampStart = wpPPM * 5;   // begin blend at 5× whole-planet PPM
-    var rampEnd   = wpPPM;       // full planet-centred at 1×
+    var rampStart = wpPPM * 5;
+    var rampEnd   = wpPPM;
     if (currentPPM <= rampStart) {
       // Use log-space for perceptually uniform ramp
       var logStart = Math.log(rampStart);
@@ -549,23 +536,8 @@ function updateWorld(dt) {
     planetViewFrac = 0;
   }
 
-  // ── Curvature computation (Phase 2) ──
   updateCurvature();
-  if (sceneView === 'flight') { applyRocketCamera(); applyCannonCamera(); }
-  else {
-    // Explicit inspection views fit the actual sphere and live vehicle. They
-    // also apply while paused, after a seek and immediately after resizing.
-    const contextRadius = Math.max(showGravityField ? 2.2 : 1.22,
-      resolveEnvironment(targetGravity).name === 'saturn' ? 2.6 : 1.22);
-    const framing = worldViewFrame(sceneView, curveRadius, W, H, sceneFocus, sceneLaunchX, contextRadius);
-    currentPPM = targetPPM = framing.ppm;
-    curveRadiusPx = curveRadius * currentPPM;
-    curveActive = true;
-    curveCentreX = framing.originX;
-    curveCentreY = framing.originY + curveRadiusPx;
-    curveCamTheta = sceneFocus.x / curveRadius;
-    planetViewFrac = sceneView === 'world' ? 1 : .6;
-  }
+  applyRocketCamera(); applyCannonCamera();
 
   computeEnvironment();
 }
@@ -598,114 +570,50 @@ function updateCurvature() {
   // Switch before the approximation can move an object by a visible pixel.
   curveActive = sagitta >= .05 || planetViewFrac > 0;
 
-  if (curveActive) {
-    // Camera angular position on sphere: cameraX (metres along surface) → angle
-    curveCamTheta = cameraX / curveRadius;
-
-    // Planet centre screen position.
-    // We require worldToScreen(cameraX, cameraY) = (0, baseGroundY)
-    // where 0 = screen X of camera anchor and baseGroundY = screen Y.
-    //
-    // worldToScreen gives: sx = pcX + (R+camY)*sin(camTheta)*ppm
-    //                      sy = pcY - (R+camY)*cos(camTheta)*ppm
-    //
-    // Solving for pcX, pcY:
-    var camR = (curveRadius + cameraY) * currentPPM;
-    curveCentreX = -camR * Math.sin(curveCamTheta);
-    curveCentreY = baseGroundY + camR * Math.cos(curveCamTheta);
-
-    // Phase 4: blend planet centre towards screen centre for whole-planet view
-    if (planetViewFrac > 0.001) {
-      var t = planetViewFrac;
-      curveCentreX = curveCentreX * (1 - t) + (W * 0.5) * t;
-      curveCentreY = curveCentreY * (1 - t) + (H * 0.5) * t;
-    }
-  }
+  updateProjectionOrigin();
 }
 
-/**
- * Convert physics coordinates (surface distance, altitude) to screen pixels.
- * When curvature is active, uses polar projection around the planet centre.
- * When flat, uses the original linear mapping.
- *
- * @param {number} physX  Surface distance from origin (metres)
- * @param {number} physY  Altitude above surface (metres)
- * @returns {{ sx: number, sy: number }} Screen coordinates
- */
+function updateProjectionOrigin() {
+  projectionOriginX = -cameraX * currentPPM;
+  projectionOriginY = baseGroundY + cameraY * currentPPM;
+  groundY = projectionOriginY;
+  curveCentreX = projectionOriginX;
+  curveCentreY = projectionOriginY + curveRadiusPx;
+}
+
+/** One physical projection at every scale: surface distance and altitude map
+ * onto the same sphere, then a uniform zoom and translation place it on screen. */
 function worldToScreen(physX, physY) {
-  if (!curveActive) {
-    return {
-      sx: (physX - cameraX) * currentPPM,
-      sy: groundY - physY * currentPPM
-    };
-  }
-
-  // Polar projection using planet-centre screen position (curveCentreX/Y).
-  // physX/R = angular position (theta) on the sphere
-  // physY = altitude above surface → radial distance = R + physY
-  //
-  // World-space position relative to planet centre:
-  //   wx = (R + physY) * sin(theta)
-  //   wy = (R + physY) * cos(theta)
-  //
-  // The camera offset is already encoded in curveCentreX/Y (planet centre
-  // screen position), so we don't subtract camera here.
-
   const point = surfacePosition(physX, physY, curveRadius);
-
-  return {
-    sx: curveCentreX + point.x * currentPPM,
-    sy: (curveCentreY - curveRadiusPx) - point.y * currentPPM
-  };
+  return { sx: projectionOriginX + point.x * currentPPM,
+    sy: projectionOriginY - point.y * currentPPM };
 }
 
-/**
- * Surface-normal angle at a given physics X position (radians).
- * This is the rotation needed to tilt a surface object to match the curved ground.
- * Returns 0 when curvature is not active.
- */
+/** The local outward normal, independent of camera zoom or ground detail. */
 function surfaceNormalAngle(physX) {
-  if (!curveActive || curveRadius <= 0) return 0;
-  // Projection translates the planet centre but never rotates the camera frame.
-  // Therefore the local normal uses the absolute surface angle.
-  return physX / curveRadius;
+  return curveRadius > 0 ? physX / curveRadius : 0;
 }
 
-/**
- * Get the screen Y for ground level (physY=0) at a given physX.
- * In flat mode, this is just groundY. In curved mode, it follows the arc.
- */
-function groundYAtPhysX(physX) {
-  if (!curveActive) return groundY;
-  var pt = worldToScreen(physX, 0);
-  return pt.sy;
-}
+function groundYAtPhysX(physX) { return worldToScreen(physX, 0).sy; }
 
 // ── Coordinate Mapping ─────────────────────────────────────────────────────
-function toCanvasX(px) {
-  if (curveActive) return worldToScreen(px, 0).sx;
-  return (px - cameraX) * currentPPM;
-}
-/** Full curved-aware transform for both coordinates at once. */
+function toCanvasX(px) { return worldToScreen(px, 0).sx; }
 function toCanvas(px, py) {
-  if (curveActive) {
-    var pt = worldToScreen(px, py);
-    return { x: pt.sx, y: pt.sy };
-  }
-  return { x: (px - cameraX) * currentPPM, y: groundY - py * currentPPM };
+  const point = worldToScreen(px, py);
+  return { x: point.sx, y: point.sy };
 }
 
-/** Inverse canvas projection, using CSS pixels (e.g. pointer minus canvas rect). */
+/** Inverse projection in CSS pixels. The rationalised altitude retains tiny
+ * near-ground heights without subtracting two nearly equal planetary radii. */
 function screenToSurface(screenX, screenY) {
-  if (!curveActive) {
-    return { x: cameraX + screenX / currentPPM, y: (groundY - screenY) / currentPPM };
-  }
-  var dx = screenX - curveCentreX;
-  var dy = curveCentreY - screenY;
-  var angle = Math.atan2(dx, dy);
-  // Choose the surface-distance winding nearest the current camera.
-  angle += Math.round((curveCamTheta - angle) / (Math.PI * 2)) * Math.PI * 2;
-  return { x: angle * curveRadius, y: Math.hypot(dx, dy) / currentPPM - curveRadius };
+  const x = (screenX - projectionOriginX) / currentPPM;
+  const y = (projectionOriginY - screenY) / currentPPM;
+  if (!(curveRadius > 0)) return { x, y };
+  let angle = Math.atan2(x, y + curveRadius);
+  const focusAngle = (rocketCamera?.state.x ?? flightFocus.x) / curveRadius;
+  angle += Math.round((focusAngle - angle) / (Math.PI * 2)) * Math.PI * 2;
+  return { x: angle * curveRadius,
+    y: (x * x + y * (2 * curveRadius + y)) / (Math.hypot(x, y + curveRadius) + curveRadius) };
 }
 
 /** A previous run is a single screen-space dashed path, with no new physics.
@@ -769,7 +677,6 @@ function drawSky() {
   if (curveActive && curveRadiusPx > 0) {
     // spaceFrac = 0 when planet is huge (flat-looking), 1 when planet is a small disc
     spaceFrac = clamp(1 - curveRadiusPx / (H * 2), 0, 1);
-    if (sceneView !== 'flight') spaceFrac = 1;
   }
 
   if (spaceFrac > 0.01) {
@@ -779,14 +686,16 @@ function drawSky() {
   }
 
   // Normal sky gradient (faded out as space takes over)
-  if (spaceFrac < 0.99 && skyBottom > 0) {
+  if (spaceFrac < 0.99) {
     ctx.globalAlpha = 1 - spaceFrac;
-    var grad = ctx.createLinearGradient(0, 0, 0, skyBottom);
+    var grad = ctx.createLinearGradient(0, 0, 0, Math.max(1, skyBottom));
     grad.addColorStop(0,   rgb(env.skyTop));
     grad.addColorStop(0.6, rgb(env.skyMid));
     grad.addColorStop(1,   rgb(env.skyBot));
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, skyBottom);
+    // A curved horizon exposes sky below the launch tangent at the edges.
+    // Cover the whole viewport before painting the sphere over it.
+    ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
   }
   if (spaceFrac > .1) { ctx.globalAlpha = spaceFrac * .65; drawStars(); ctx.globalAlpha = 1; }
@@ -2560,38 +2469,26 @@ function drawFizzle(physX, physY, progress) {
 // ── Composite World Draw ───────────────────────────────────────────────────
 function drawWorld() {
   drawSky();
-  if (!curveActive) {
-    // Flat mode: features draw behind the ground (sky objects)
-    if (env.lowerAlpha > 0.02) drawPlanetFeatures(env.lowerPlanet, env.lowerAlpha);
-    if (env.upperAlpha > 0.02 && env.upperPlanet !== env.lowerPlanet) {
-      drawPlanetFeatures(env.upperPlanet, env.upperAlpha);
-    }
+  // Keep the original scene layering while local scenery fades into the
+  // distant surface map. Ground-detail thresholds never switch the camera.
+  const localDetail = 1 - globeVisibility();
+  if (env.lowerAlpha * localDetail > .02) drawPlanetFeatures(env.lowerPlanet, env.lowerAlpha * localDetail);
+  if (env.upperAlpha * localDetail > .02 && env.upperPlanet !== env.lowerPlanet) {
+    drawPlanetFeatures(env.upperPlanet, env.upperAlpha * localDetail);
   }
   drawWorldRings(false);
   drawGround();
   if (curveActive) drawGlobeSurface();
   drawWorldRings(true);
   drawMound();
-  if (curveActive) {
-    // Curved mode: draw orbital features after ground so moons/rings
-    // appear in front of the planet disc.
-    // Nearby sky scenery is decorative and has no scale relationship to the
-    // launch world. Only retain surface scenery at close range.
-    if (curveRadiusPx > Math.max(W, H) * 3 && sceneView === 'flight') {
-      if (env.lowerAlpha > 0.02) drawPlanetFeatures(env.lowerPlanet, env.lowerAlpha);
-      if (env.upperAlpha > 0.02 && env.upperPlanet !== env.lowerPlanet) {
-        drawPlanetFeatures(env.upperPlanet, env.upperAlpha);
-      }
-    }
-  }
-  if (showGravityField) drawGravityField();
 }
 
 function drawWorldRings(front: boolean) {
-  if (!curveActive || curveRadiusPx > Math.max(W, H) * 3) return;
+  const visibility = globeVisibility();
+  if (!curveActive || visibility <= 0) return;
   const saturnAlpha = (env.lowerPlanet.name === 'saturn' ? env.lowerAlpha : 0) + (env.upperPlanet.name === 'saturn' ? env.upperAlpha : 0);
   if (saturnAlpha < .01) return;
-  ctx.save(); ctx.globalAlpha = saturnAlpha * .7;
+  ctx.save(); ctx.globalAlpha = saturnAlpha * visibility * .7;
   // Measured C/B/A ring radii, rather than ratios to Saturn's equatorial
   // radius (our sphere uses its mean radius): NASA's Saturnian Rings Fact Sheet,
   // https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html
@@ -2608,8 +2505,11 @@ function drawWorldRings(front: boolean) {
 
 /** The radius is physical; the cached surface maps and illumination are
  * illustrations. Fade them in once the disc becomes a useful view of a world. */
+function globeVisibility() {
+  return curveRadiusPx > 0 ? clamp((Math.max(W, H) * 10 / curveRadiusPx - 1) / 2, 0, 1) : 0;
+}
 function drawGlobeSurface() {
-  const visibility = clamp((Math.max(W, H) * 10 / curveRadiusPx - 1) / 2, 0, 1);
+  const visibility = globeVisibility();
   if (visibility <= 0) return;
   ctx.save(); ctx.globalAlpha = visibility;
   ctx.beginPath(); ctx.arc(curveCentreX, curveCentreY, curveRadiusPx, 0, Math.PI * 2); ctx.clip();
@@ -2624,65 +2524,6 @@ function drawGlobeSurface() {
     ctx.globalAlpha = visibility * alpha;
     ctx.drawImage(globe, curveCentreX - curveRadiusPx, curveCentreY - curveRadiusPx, curveRadiusPx * 2, curveRadiusPx * 2);
   }
-  ctx.restore();
-}
-
-/** Concentric distances and inward arrows depict the same inverse-square
- * field used by both solvers. Rings are measured from the centre, not altitude. */
-function drawGravityField() {
-  if (!curveActive || curveRadiusPx > Math.max(W, H) * 4) {
-    ctx.save(); ctx.font = '12px system-ui'; ctx.fillStyle = '#193330';
-    ctx.fillText('Choose Horizon or Whole world to see the gravity field.', 14, H - 18);
-    ctx.restore(); return;
-  }
-  ctx.save(); ctx.strokeStyle = '#e6cf8990'; ctx.fillStyle = '#f8e5ae'; ctx.lineWidth = 1;
-  ctx.font = '12px system-ui';
-  for (const multiple of [1.25, 1.5, 2]) {
-    const ring = curveRadiusPx * multiple;
-    ctx.setLineDash([3, 6]); ctx.beginPath(); ctx.arc(curveCentreX, curveCentreY, ring, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-    const length = Math.min(28, curveRadiusPx * .18) / (multiple * multiple);
-    const labelX = curveCentreX + ring * .707, labelY = curveCentreY - ring * .707;
-    const label = W < 480 ? `${multiple}R · ${(1 / multiple ** 2).toFixed(2)}g₀`
-      : `${multiple} R · ${(1 / multiple ** 2).toFixed(2)}× surface g`;
-    const labelWidth = ctx.measureText(label).width;
-    if (H >= 260 && (curveRadiusPx >= 115 || multiple === 2) &&
-      labelX > 5 && labelX + labelWidth + 12 < W && labelY > 20 && labelY < H - 65) {
-      ctx.fillStyle = '#0b1c2ce8'; ctx.fillRect(labelX + 3, labelY - 15, labelWidth + 8, 20);
-      ctx.fillStyle = '#f8e5ae'; ctx.fillText(label, labelX + 7, labelY);
-    }
-    const count = curveRadiusPx < 60 ? 8 : 16, head = Math.min(5, length * .45);
-    for (let i = 0; i < count; i++) {
-      const angle = i * Math.PI * 2 / count, dx = Math.cos(angle), dy = Math.sin(angle);
-      const x = curveCentreX + ring * dx, y = curveCentreY + ring * dy;
-      if (x < -30 || x > W + 30 || y < -30 || y > H + 30) continue;
-      const ex = x - dx * length, ey = y - dy * length;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey);
-      ctx.moveTo(ex + dx * head - dy * head * .6, ey + dy * head + dx * head * .6); ctx.lineTo(ex, ey);
-      ctx.lineTo(ex + dx * head + dy * head * .6, ey + dy * head - dx * head * .6); ctx.stroke();
-    }
-  }
-  ctx.fillStyle = '#0b1c2ce8'; ctx.fillRect(10, H - (H < 260 ? 30 : 52), Math.min(W - 20, 290), H < 260 ? 22 : 42);
-  ctx.fillStyle = '#f8e5ae';
-  if (H < 260) ctx.fillText('Gravity → centre · strength ∝ 1/r²', 18, H - 14);
-  else {
-    ctx.fillText('Gravity pulls toward the centre.', 18, H - 34);
-    ctx.fillText(W < 480 ? '2R: ¼ of surface gravity (g₀).' : 'At twice the radius: one-quarter as strong.', 18, H - 17);
-  }
-  ctx.restore();
-}
-
-function drawWorldLocator(point: SurfacePoint | null, launchX: number) {
-  if (sceneView === 'flight' && planetViewFrac < .5) return;
-  const launch = toCanvas(launchX, 0), current = point ? toCanvas(point.x, point.y) : launch;
-  ctx.save(); ctx.strokeStyle = '#fff1bb'; ctx.fillStyle = '#fff1bb'; ctx.lineWidth = 1.5; ctx.font = '12px system-ui';
-  ctx.beginPath(); ctx.arc(launch.x, launch.y, 4, 0, Math.PI * 2); ctx.stroke();
-  const caption = point && Math.hypot(current.x - launch.x, current.y - launch.y) < 8 ? 'Launch + flight (close together at this scale)' : 'Launch site';
-  const labelWidth = ctx.measureText(caption).width;
-  const labelX = clamp(launch.x + 10, 8, Math.max(8, W - labelWidth - 8));
-  const labelY = clamp(launch.y - 13, 20, H - 62);
-  ctx.fillStyle = '#0b1c2ce8'; ctx.fillRect(labelX - 4, labelY - 13, labelWidth + 8, 19);
-  ctx.fillStyle = '#fff1bb'; ctx.fillText(caption, labelX, labelY);
-  if (point) { ctx.fillStyle = '#8ee9ff'; ctx.beginPath(); ctx.arc(current.x, current.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
   ctx.restore();
 }
 
@@ -2742,11 +2583,7 @@ export const Renderer = {
   resetCamera: resetCamera,
   setRocketCamera: setRocketCamera,
   setCannonCamera,
-  setSceneView,
-  getSceneView: () => sceneView,
-  setSceneFocus,
-  setGravityField: (show: boolean) => { showGravityField = show; },
-  drawWorldLocator,
+  setFlightFocus,
   setBarrelLength: setBarrelLength,
   clear: clear,
   drawWorld: drawWorld,

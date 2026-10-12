@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ENVIRONMENTS } from '../src/environment.ts';
 import { Physics } from '../src/physics.ts';
 import { RocketPhysics } from '../src/rocket_physics.ts';
-import { surfacePosition, radialGravity, gravityAtAltitude, worldViewFrame } from '../src/spherical-world.ts';
+import { surfacePosition, radialGravity, gravityAtAltitude } from '../src/spherical-world.ts';
 
 const near = (actual, expected, tolerance = 1e-7) => assert.ok(Math.abs(actual - expected) <= tolerance,
   `${actual} differs from ${expected} by more than ${tolerance}`);
@@ -48,23 +48,6 @@ test('both solvers freely fall toward the same centre, including the side and un
     near(nextRocket.wx, nextBall.wx, radius * 1e-14);
     near(nextRocket.wy, nextBall.wy, radius * 1e-14);
     near(nextRocket.wvx, nextBall.wvx); near(nextRocket.wvy, nextBall.wvy);
-  }
-});
-
-test('world and horizon frames keep distant flights visible without stretching the sphere', () => {
-  for (const { radius } of ENVIRONMENTS) for (const [width, height] of [[960, 540], [320, 300], [640, 180]]) {
-    for (const mode of ['world', 'horizon']) for (const focus of [
-      { x: 0, y: 0 }, { x: radius * 2, y: radius * .6 }, { x: radius * 4, y: radius * 20 }]) {
-      const frame = worldViewFrame(mode, radius, width, height, focus, 0);
-      const visible = point => {
-        const p = surfacePosition(point.x, point.y, radius);
-        const x = frame.originX + p.x * frame.ppm, y = frame.originY - p.y * frame.ppm;
-        assert.ok(x >= 23 && x <= width - 23 && y >= 23 && y <= height - 23, `${mode} at ${width}×${height}: ${x}, ${y}`);
-      };
-      visible(focus); visible({ x: 0, y: 0 });
-      if (mode === 'world') for (let a = 0; a < 2 * Math.PI; a += Math.PI / 12) visible({ x: a * radius, y: 0 });
-      assert.ok(Number.isFinite(frame.ppm) && frame.ppm > 0);
-    }
   }
 });
 
