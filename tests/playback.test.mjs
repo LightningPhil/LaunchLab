@@ -10,8 +10,8 @@ const longRun = { duration: 1200, events: [
   {time:0,kind:'launch'}, {time:180,kind:'burnout'}, {time:600,kind:'apex'}, {time:1200,kind:'impact'}
 ] };
 
-test('Auto completes short through six-hour recordings within 20 viewing seconds at varied frame rates', () => {
-  for (const duration of [0, .1, 5, 19.99, 20, 20.01, 37.5, 60, 600, 1200, 21600]) {
+test('Auto completes short through year-long recordings within 20 viewing seconds at varied frame rates', () => {
+  for (const duration of [0, .1, 5, 19.99, 20, 20.01, 37.5, 60, 600, 1200, 21600, 86400 * 231, 86400 * 365]) {
     const run = { duration, events: [
       {time:0,kind:'launch'}, {time:duration * .07,kind:'burnout'},
       {time:duration * .53,kind:'apex'}, {time:duration,kind:'impact'},

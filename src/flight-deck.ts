@@ -1,15 +1,11 @@
-import { formatNumber } from './number-format.ts';
+import { formatNumber, formatTime } from './number-format.ts';
+export { formatTime } from './number-format.ts';
 import './flight-deck.css';
 import { compatibleRuns, describeChanges, type FlightRecord } from './flight.ts';
 import { PlaybackClock } from './playback.ts';
 
 const reducedMotionQuery = typeof matchMedia === 'function'
   ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-
-export function formatTime(seconds: number) {
-  const whole = Math.floor(Math.max(0, seconds));
-  return `${Math.floor(whole / 60).toString().padStart(2, '0')}:${(whole % 60).toString().padStart(2, '0')}`;
-}
 
 export class FlightDeck {
   clock = new PlaybackClock();
@@ -25,6 +21,7 @@ export class FlightDeck {
   private element: HTMLElement;
   private status: HTMLElement;
   private error: HTMLElement;
+  private escapeResult: HTMLElement;
   private lastStatus = '';
   private previousRuns: Partial<Record<FlightRecord['mode'], FlightRecord>> = {};
   onSeek: () => void = () => {};
@@ -73,6 +70,14 @@ export class FlightDeck {
     this.error = document.createElement('p');
     this.error.className = 'flight-error'; this.error.setAttribute('role', 'alert'); this.error.hidden = true;
     document.querySelector('.launch-actions')!.append(this.error);
+    this.escapeResult = document.createElement('section');
+    this.escapeResult.className = 'escape-result'; this.escapeResult.hidden = true;
+    this.escapeResult.setAttribute('aria-labelledby', 'escape-result-title');
+    this.escapeResult.innerHTML = `<button type="button" aria-label="Dismiss escape message">×</button>
+      <span class="escape-eyebrow">ONE-WAY TICKET TO SPACE</span>
+      <h2 id="escape-result-title">Escape velocity reached!</h2><p></p>`;
+    this.escapeResult.querySelector('button')!.onclick = () => { this.escapeResult.hidden = true; };
+    parent.append(this.escapeResult);
     settings.addEventListener('keydown', event => {
       if(event.key === 'Escape') { settings.open = false; settings.querySelector('summary')!.focus(); event.stopPropagation(); }
     });
@@ -148,7 +153,14 @@ export class FlightDeck {
     if (!this.run) return;
     const run = this.run, end = run.samples[run.samples.length - 1];
     if (run.outcome === 'no-liftoff') { this.message(end.outcomeReason || 'No lift-off: outward thrust must exceed weight. Try less mass, a steeper angle or more thrust.'); return; }
-    if (run.outcome === 'escape') { this.message('Escape trajectory. The unpowered vehicle is heading away with enough energy to leave this world.'); return; }
+    if (run.outcome === 'escape') {
+      const name = run.config.environment?.name;
+      const world = name && !run.config.environment.interpolated ? name[0].toUpperCase() + name.slice(1) : 'this world';
+      const text = `This ${run.mode === 'cannon' ? 'cannonball' : 'rocket'} is ${formatNumber(end.y / 1000)} km above ${world} and still heading away. It won’t land again in this simulation, so we’ve paused here. Replay the journey or explore with Manual zoom.`;
+      this.clock.paused = true;
+      this.escapeResult.querySelector('p')!.textContent = text; this.escapeResult.hidden = false;
+      this.message(`Escape velocity reached! ${text}`); this.update(); return;
+    }
     if (run.outcome === 'orbit') { this.message('Orbit established: the unpowered path clears the planet. Replay or try another launch.'); return; }
     if (run.outcome !== 'impact') { this.message('Observation ended before a landing or confirmed orbit. Try a shorter burn.'); return; }
     if (run.mode === 'rocket') {
@@ -159,7 +171,13 @@ export class FlightDeck {
   }
   update() {
     const time = this.clock.time, run = this.run;
-    this.get('flight-time').textContent = `${formatTime(time)}.${Math.floor(time * 10) % 10}`;
+    if (this.busy || !run || time < run.duration) this.escapeResult.hidden = true;
+    if (!this.escapeResult.hidden) {
+      this.escapeResult.style.top = `${this.element.offsetHeight + 12}px`;
+      this.escapeResult.style.maxHeight = `calc(100% - ${this.element.offsetHeight + 88}px)`;
+    }
+    this.element.classList.toggle('long-flight', !!run && run.duration >= 86400);
+    this.get('flight-time').textContent = `${formatTime(time)}${time < 3600 ? `.${Math.floor(time * 10) % 10}` : ''}`;
     this.get('flight-rate').textContent = this.clock.paused && run ? 'Paused' : `${this.clock.mode === 'auto' ? 'Auto · ' : ''}${formatNumber(this.clock.rate, 1)}×`;
     const reduced = !!reducedMotionQuery?.matches;
     const handTime = reduced ? Math.floor(time) : time;
@@ -172,7 +190,7 @@ export class FlightDeck {
     this.button('flight-next').disabled = !run || this.busy || time >= run.duration;
     this.input('flight-timeline').disabled = !run || this.busy;
     const finished = !!(run && time >= run.duration);
-    this.button('flight-pause').textContent = finished ? 'Finished' : run && this.clock.paused ? 'Resume' : 'Pause';
+    this.button('flight-pause').textContent = finished ? run.outcome === 'escape' ? 'Paused' : 'Finished' : run && this.clock.paused ? 'Resume' : 'Pause';
     this.button('flight-pause').setAttribute('aria-label',
       !run ? 'Pause flight' : finished ? 'Replay finished flight' : this.clock.paused ? 'Resume flight' : 'Pause flight');
   }

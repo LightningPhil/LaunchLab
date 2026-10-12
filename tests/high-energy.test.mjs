@@ -4,6 +4,7 @@ import { ENVIRONMENTS, classifyTrajectory } from '../src/environment.ts';
 import { Physics } from '../src/physics.ts';
 import { recordFlight, sampleFlight, MAX_RECORD_TIME } from '../src/flight.ts';
 import { PlaybackClock, MAX_AUTO_VIEW_SECONDS } from '../src/playback.ts';
+import { ESCAPE_CENTRE_RADII } from '../src/ballistic-coast.ts';
 
 function launch(environment, force = 10000000, mass = .1, barrelLength = 10) {
   const config = { force, forceMultiplier: 1000, angle: 45, mass, barrelLength,
@@ -17,14 +18,14 @@ test('maximum ×1,000 shots on every world remain finite and playable in Auto', 
     const run = await launch(environment), final = run.samples.at(-1);
     const expected = ['jupiter', 'sun'].includes(environment.name) ? 'impact' : 'escape';
     assert.equal(run.outcome, expected, environment.name);
-    assert.ok(run.duration > 0 && run.duration <= MAX_RECORD_TIME);
+    assert.ok(run.duration > 0 && Number.isFinite(run.duration));
     assert.ok(run.samples.length <= 16010, 'Long flights retain bounded sample storage');
     for (const state of run.samples) {
       assert.ok([state.x, state.y, state.vx, state.vy, state.time].every(Number.isFinite));
       assert.ok(state.y >= -1e-6, 'No projectile passes through the round surface');
     }
     if (expected === 'escape') {
-      assert.ok(final.y >= 2 * environment.radius, environment.name);
+      assert.ok(final.y >= (ESCAPE_CENTRE_RADII - 1) * environment.radius - .001, environment.name);
       assert.equal(classifyTrajectory(final, environment.gravity).kind, 'escape');
       assert.ok(!run.events.some(e => e.kind === 'impact' || e.kind === 'apex'));
       const initialEnergy = classifyTrajectory(run.samples[0], environment.gravity).specificEnergy;
@@ -67,13 +68,15 @@ test('the earlier nearly escaping Earth shot remains playable at over 1,000×', 
   assert.equal(clock.time, run.duration); assert.ok(clock.rate > 1000);
 });
 
-test('a near-escape Moon shot ends at the observation cap without inventing a landing', async () => {
+test('a near-escape Moon shot completes its whole return beyond the old observation cap', async () => {
   const moon = ENVIRONMENTS.find(e => e.name === 'moon');
   const run = await launch(moon, 280000, .5, 5);
-  assert.equal(run.outcome, 'limit');
-  assert.equal(run.duration, MAX_RECORD_TIME);
+  assert.equal(run.outcome, 'impact');
+  assert.ok(run.duration > MAX_RECORD_TIME);
   assert.ok(run.maxHeight > moon.radius * 5);
-  assert.ok(!run.events.some(e => e.kind === 'impact'));
+  assert.ok(run.events.some(e => e.kind === 'impact'));
+  assert.equal(run.samples.at(-1).y, 0);
+  assert.ok(!run.events.some(e => e.kind === 'end' && e.label === 'Observation limit'));
   const clock = new PlaybackClock(); clock.load(run); clock.advance(MAX_AUTO_VIEW_SECONDS, run);
   assert.equal(clock.time, run.duration); assert.equal(clock.paused, true);
 });

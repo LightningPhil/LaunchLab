@@ -105,13 +105,13 @@ test('long recorded returning flight remains visible through Auto/64×, curvatur
   }
 });
 
-test('far escaping rocket has no planet-scale zoom floor and stays visible after direct seeks', async () => {
+test('a rocket coasting after a distant cutoff keeps travelling and stays visible after direct seeks', async () => {
   const setup = config(1.62, { propMass: 0, epsilon: 120 });
   const initial = { ...RocketPhysics.createRocketState(setup),
-    ...Physics.createProjectile(0, 100, 1000000, 85, 100, setup.planetRadius),
+    ...Physics.createProjectile(0, 20 * setup.planetRadius, 1000000, 85, 100, setup.planetRadius),
     theta: 85, launched: true, engineOn: false };
   const run = await recordFlight('rocket', setup, initial);
-  assert.equal(run.outcome, 'escape'); assert.ok(run.maxHeight > 10 * setup.planetRadius);
+  assert.equal(run.outcome, 'escape'); assert.ok(run.maxHeight > 40 * setup.planetRadius);
   const h = scene(); Renderer.setTargetGravity(setup.gravity); Renderer.updateWorld(10);
   for (let frame = 0; frame < 600; frame++) paintFrame(h, run, run.duration, 64);
   assert.ok(Renderer.getCurrentPPM() < Renderer.getWholePlanetPPM() * .3);

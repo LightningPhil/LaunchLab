@@ -1,11 +1,14 @@
 import { Physics } from './physics.ts';
 import { RocketPhysics } from './rocket_physics.ts';
+import { pressureAtAltitude } from './environment.ts';
+import { ESCAPE_CENTRE_RADII, planBallisticCoast, sampleBallisticCoast, type BallisticCoast } from './ballistic-coast.ts';
 
 export type FlightEvent = { time: number; kind: string; label: string };
 export type FlightRecord = {
   id: number; mode: 'cannon' | 'rocket'; config: Readonly<Record<string, any>>;
   samples: any[]; events: FlightEvent[]; duration: number; outcome: string;
   maxHeight: number; minX: number; maxX: number; launchX: number;
+  coast?: BallisticCoast;
 };
 export const PHYSICS_STEP = 1 / 120;
 export const MIN_CANNON_PATH_POINTS = 20;
@@ -35,6 +38,7 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
   let state = structuredClone(initial), sampleInterval = 0.1, sampleAt = sampleInterval;
   let deadline = performance.now() + 8, classifiedAt: number | null = null;
   let classification = '';
+  let coastChecked = false;
   const eventTimes = new Set<number>([0]);
   const step = (before: any, duration: number) => mode === 'rocket'
     ? RocketPhysics.stepRocket(before, duration, saved.gravity, guidance)
@@ -50,6 +54,46 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
   };
   for (let i = 0; i < Math.ceil(maxTime / PHYSICS_STEP) && state.time < maxTime; i++) {
     if (signal?.aborted) throw new DOMException('Flight cancelled', 'AbortError');
+    // Resolve long, unpowered journeys exactly instead of clipping an ellipse
+    // at the numerical recording limit. Short flights keep their usual solver;
+    // explicit observation limits and all powered motion still use that path.
+    if (options.maxTime === undefined && !coastChecked && !state.engineOn) {
+      const coast = planBallisticCoast(state, saved.gravity);
+      if (coast) {
+        coastChecked = true;
+        if (coast.outcome === 'escape' || coast.endTime > MAX_RECORD_TIME) {
+          run.coast = coast;
+          if (coast.outcome === 'escape') addEvent(state.time, 'escape', 'Escape velocity reached');
+          if (coast.apexTime !== null) addEvent(coast.apexTime, 'apex', 'Highest point');
+          if (coast.outcome === 'impact') addEvent(coast.endTime, 'impact', 'Surface contact');
+          if (saved.guidanceMode === 'pitch_program') {
+            for (const [time, label] of [[saved.pitchT1, 'Pitch begins'], [saved.pitchT2, 'Pitch complete']] as [number, string][]) {
+              if (time > state.time && time <= coast.endTime) addEvent(time, 'guidance', label);
+            }
+          }
+          // Uniform samples draw the distant arc; logarithmic samples at both
+          // ends preserve the much faster motion close to the launch/landing.
+          const duration = coast.endTime - state.time, times = new Set<number>([state.time, coast.endTime]);
+          for (let j = 1; j < 512; j++) times.add(state.time + duration * j / 512);
+          for (let j = 1; j <= 1024; j++) {
+            const offset = Math.expm1(Math.log1p(duration / 2) * j / 1024);
+            times.add(state.time + offset); times.add(coast.endTime - offset);
+          }
+          for (const event of run.events) if (event.time >= state.time) times.add(event.time);
+          for (const time of [...times].sort((a, b) => a - b)) {
+            if (signal?.aborted) throw new DOMException('Flight cancelled', 'AbortError');
+            const sample = sampleCoast(run, time, guidance);
+            run.samples.push(sample);
+            run.maxHeight = Math.max(run.maxHeight, sample.y, sample.apexHeight ?? 0);
+            run.minX = Math.min(run.minX, sample.x); run.maxX = Math.max(run.maxX, sample.x);
+            if (performance.now() >= deadline) {
+              await new Promise(resolve => setTimeout(resolve, 0)); deadline = performance.now() + 8;
+            }
+          }
+          state = sampleCoast(run, coast.endTime, guidance); run.outcome = coast.outcome; break;
+        }
+      }
+    }
     const before = state;
     state = step(before, Math.min(PHYSICS_STEP, maxTime - before.time));
     if (![state.x, state.y, state.vx, state.vy, state.time].every(Number.isFinite)) {
@@ -96,10 +140,7 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
         eventTimes.add(state.time); run.samples.push({ ...state });
       }
     }
-    // A few seconds barely clear the launch site on a planetary-scale escape.
-    // Follow it out to three body radii from the centre, then let Auto compress
-    // that physical journey into the same short, inspectable viewing session.
-    const escapeVisible = classification !== 'escape' || state.y >= 2 * state.planetRadius;
+    const escapeVisible = classification !== 'escape' || state.y >= (ESCAPE_CENTRE_RADII - 1) * state.planetRadius;
     if (classifiedAt !== null && state.time >= classifiedAt + 20 && escapeVisible) { run.outcome = classification; break; }
     if (performance.now() >= deadline) {
       await new Promise(resolve => setTimeout(resolve, 0)); deadline = performance.now() + 8;
@@ -132,6 +173,22 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
   return run;
 }
 
+function sampleCoast(run: FlightRecord, time: number, guidance = run.mode === 'rocket' ? RocketPhysics.buildGuidance(run.config) : null) {
+  const plan = run.coast!, state = sampleBallisticCoast(plan, time), initial = plan.initial;
+  if (run.mode === 'rocket') {
+    // At contact use incoming velocity for the accumulated gravitational impulse.
+    const longitude = state.x / state.planetRadius;
+    const vx = state.outcome === 'impact' ? state.impactVx * Math.cos(longitude) + state.impactVy * Math.sin(longitude) : state.wvx;
+    const vy = state.outcome === 'impact' ? -state.impactVx * Math.sin(longitude) + state.impactVy * Math.cos(longitude) : state.wvy;
+    Object.assign(state, { engineOn: false, thrustMagnitude: 0, mdot: 0, Isp: 0, flowRegime: 'off',
+      gravityImpulseX: initial.gravityImpulseX + vx - initial.wvx,
+      gravityImpulseY: initial.gravityImpulseY + vy - initial.wvy });
+    if (state.environment) state.Pa_Pa = pressureAtAltitude(state.environment, state.y);
+    state.theta = guidance!.getAngle(state);
+  }
+  return state;
+}
+
 /** Rebuild the state at an inspection time with the same canonical solver used
  * to record the flight. Sparse samples keep long runs compact, but linear
  * interpolation is not valid during a high-mass-ratio burn because rocket
@@ -160,6 +217,7 @@ export function sampleFlight(run: FlightRecord, time: number): any {
   const samples = run.samples;
   if (time >= run.duration) return { ...samples[samples.length - 1] };
   if (time <= 0) return { ...samples[0] };
+  if (run.coast && time >= run.coast.initial.time) return sampleCoast(run, time);
   let lo = 0, hi = samples.length - 1;
   while (hi - lo > 1) { const mid = (lo + hi) >>> 1; if (samples[mid].time <= time) lo = mid; else hi = mid; }
   const a = samples[lo], b = samples[hi];
