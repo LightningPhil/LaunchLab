@@ -2544,7 +2544,11 @@ function drawGlobeSurface() {
   const visibility = globeVisibility();
   if (visibility <= 0) return;
   ctx.save(); ctx.globalAlpha = visibility;
+  // Geometry owns the silhouette. The opaque surface colours extend beyond
+  // this circle, so zooming never enlarges a low-resolution bitmap alpha edge.
   ctx.beginPath(); ctx.arc(curveCentreX, curveCentreY, curveRadiusPx, 0, Math.PI * 2); ctx.clip();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   const shade = ctx.createRadialGradient(curveCentreX - curveRadiusPx * .35, curveCentreY - curveRadiusPx * .35,
     0, curveCentreX, curveCentreY, curveRadiusPx);
   shade.addColorStop(0, rgb(env.groundTop)); shade.addColorStop(.7, rgb(env.groundBot)); shade.addColorStop(1, '#14232e');

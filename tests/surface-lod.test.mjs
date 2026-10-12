@@ -104,7 +104,7 @@ test('every packaged tier has actual image dimensions, source detail, and local 
   assert.equal(WORLD_MAPS.earth.at(-1).width, 8192);
 });
 
-test('projection stays round, north-up, seamless across row chunks and bounded in size', () => {
+test('surface colours stay north-up, seamless across row chunks and bounded in size', () => {
   assert.equal(globeSize(512), 256);
   assert.equal(globeSize(2048), 1024);
   assert.equal(globeSize(8192), 2048);
@@ -120,9 +120,30 @@ test('projection stays round, north-up, seamless across row chunks and bounded i
   for (let y = 0; y < size; y += 8) projectGlobeRows(pixels, width, height, chunks, size, y, y + 8, true);
   assert.deepEqual(chunks, whole);
   const pixel = (x, y) => whole.slice((y * size + x) * 4, (y * size + x) * 4 + 4);
-  assert.equal(pixel(0, 0)[3], 0);
+  assert.equal(pixel(0, 0)[3], 255, 'corners extend the limb colour for vector clipping');
   assert.equal(pixel(32, 32)[3], 255);
   assert.ok(pixel(32, 8)[1] < pixel(32, 56)[1], 'north is above south');
   assert.ok(pixel(8, 32)[0] < pixel(56, 32)[0], 'longitude is not mirrored');
   assert.ok(Math.abs(pixel(32, 32)[0] - 128) < 5, 'centre longitude stays fixed');
+});
+
+test('magnified horizons cannot reveal a baked pixel staircase at any texture level', () => {
+  // A tiny, deliberately coarse colour layer reproduces the worst magnification
+  // case. Any partial/zero alpha in its footprint would expose pixel-shaped
+  // gaps inside the live circle. This must also work before detail maps load.
+  const width = 8, height = 8;
+  const pixels = new Uint8ClampedArray(width * height * 4).fill(180);
+  for (const size of [16, 32, 64, 256]) {
+    const output = new Uint8ClampedArray(size * size * 4);
+    projectGlobeRows(pixels, width, height, output, size, 0, size, true);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const index = (y * size + x) * 4;
+      assert.equal(output[index + 3], 255, `opaque colour at ${x},${y} on ${size}px map`);
+      // Limb colour must extend outside the circle, not opaque black/blank
+      // padding which would create a different staircase after interpolation.
+      assert.ok(output[index] >= 122 && output[index] <= 180);
+      assert.equal(output[index], output[index + 1]);
+      assert.equal(output[index], output[index + 2]);
+    }
+  }
 });

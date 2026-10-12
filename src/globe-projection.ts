@@ -5,16 +5,22 @@ export function globeSize(textureWidth: number): number {
 }
 
 /** Input is the middle half of the equirectangular map (the visible hemisphere).
+ * This is an opaque colour layer, not a cut-out sphere. Extend the limb colour
+ * outside the disc so magnifying it cannot magnify a pixel-shaped alpha edge.
+ * The renderer clips to a vector circle at the final screen resolution.
  * Bake a few rows at a time so the caller can yield to animation and input. */
 export function projectGlobeRows(
   pixels: Uint8ClampedArray, width: number, height: number,
   output: Uint8ClampedArray, size: number, start: number, end: number, sun: boolean,
 ) {
   for (let y = start; y < end; y++) for (let x = 0; x < size; x++) {
-    const nx = (x + .5) * 2 / size - 1, ny = (y + .5) * 2 / size - 1;
+    let nx = (x + .5) * 2 / size - 1, ny = (y + .5) * 2 / size - 1;
     const square = nx * nx + ny * ny;
-    if (square >= 1) continue;
-    const nz = Math.sqrt(1 - square);
+    if (square > 1) {
+      const distance = Math.sqrt(square);
+      nx /= distance; ny /= distance;
+    }
+    const nz = Math.sqrt(Math.max(0, 1 - square));
     const u = (.5 + Math.atan2(nx, nz) / Math.PI) * (width - 1);
     const v = (.5 + Math.asin(ny) / Math.PI) * (height - 1);
     const ix = Math.floor(u), iy = Math.floor(v), fx = u - ix, fy = v - iy;
@@ -28,6 +34,6 @@ export function projectGlobeRows(
       const lower = pixels[c + channel] * (1 - fx) + pixels[d + channel] * fx;
       output[index + channel] = (upper * (1 - fy) + lower * fy) * light;
     }
-    output[index + 3] = Math.min(1, (1 - Math.sqrt(square)) * size / 2) * 255;
+    output[index + 3] = 255;
   }
 }

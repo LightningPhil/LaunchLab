@@ -4,6 +4,8 @@ import { globeSize, projectGlobeRows } from './globe-projection.ts';
 
 // Serialise large image decodes / projections, including rapid world changes.
 // The renderer keeps the previous resolution while an upgrade is in progress.
+// These opaque colour layers deliberately have no baked silhouette: the live
+// vector circle in renderer.ts owns the planet's edge at every zoom level.
 let bakeQueue: Promise<unknown> = Promise.resolve();
 const globes = new Map<string, { surface: SurfaceLod<HTMLCanvasElement>; lastUse: number }>();
 const release = (canvas: HTMLCanvasElement) => { canvas.width = canvas.height = 1; };
