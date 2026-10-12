@@ -160,6 +160,18 @@ test('sky covers the space exposed below a curved horizon on compact scenes', ()
     'The first sky layer fills beneath both sides of the arc, before ground painting');
 });
 
+test('manual inspection paints the far hemisphere as ground even at close zoom', () => {
+  const h = harness(), radius = 6371000;
+  Renderer.setManualZoom(true);
+  Renderer.centreView(Renderer.toCanvas(Math.PI * radius, 0)); Renderer.updateWorld(0);
+  const location = Renderer.toCanvas(Math.PI * radius, 0);
+  assert.ok(Math.abs(location.x - 480) < 1e-6 && Math.abs(location.y - 270) < 1e-6);
+  h.calls.length = 0; Renderer.drawWorld();
+  assert.ok(h.calls.some(call => call.name === 'arc' && call.args[2] === radius * 80),
+    'The underside uses the same physical circle instead of the launch tangent');
+  Renderer.resetCamera();
+});
+
 test('rocket points along commanded thrust and plume begins behind its nozzle', () => {
   const h = harness();
   const state = { phase: 'flight', x: 2, y: 3, theta: 90, vx: 30, vy: -2 };

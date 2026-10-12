@@ -1,3 +1,4 @@
+import { formatNumber } from './number-format.ts';
 import './flight-deck.css';
 import { compatibleRuns, describeChanges, type FlightRecord } from './flight.ts';
 import { PlaybackClock } from './playback.ts';
@@ -141,7 +142,7 @@ export class FlightDeck {
     if (!this.run || !this.baseline || this.run.id === this.baseline.id) { note.textContent = this.pinned ? 'This flight is your pinned baseline.' : 'Your previous flight will stay as a faint trail.'; return; }
     if (this.run.mode !== this.baseline.mode) { note.textContent = `Your pinned ${this.baseline.mode} flight is kept. Switch launcher to compare it.`; return; }
     const compare = compatibleRuns(this.run, this.baseline);
-    note.textContent = `${this.pinned ? 'Pinned baseline' : 'Previous flight'}: ${this.baseline.maxHeight.toFixed(1)} m high · ${formatTime(this.baseline.duration)}. ${describeChanges(this.baseline, this.run)}${compare ? '' : ' · Different world: compare measurements; overlay hidden.'}`;
+    note.textContent = `${this.pinned ? 'Pinned baseline' : 'Previous flight'}: ${formatNumber(this.baseline.maxHeight, 1)} m high · ${formatTime(this.baseline.duration)}. ${describeChanges(this.baseline, this.run)}${compare ? '' : ' · Different world: compare measurements; overlay hidden.'}`;
   }
   showResult() {
     if (!this.run) return;
@@ -151,22 +152,22 @@ export class FlightDeck {
     if (run.outcome === 'orbit') { this.message('Orbit established: the unpowered path clears the planet. Replay or try another launch.'); return; }
     if (run.outcome !== 'impact') { this.message('Observation ended before a landing or confirmed orbit. Try a shorter burn.'); return; }
     if (run.mode === 'rocket') {
-      this.message(`Landed ${(end.x - run.launchX).toFixed(1)} m from pad · ${formatTime(run.duration)} flight${end.impactSpeed != null ? ` · ${end.impactSpeed.toFixed(1)} m/s at contact` : ''}.`); return;
+      this.message(`Landed ${formatNumber(end.x - run.launchX, 1)} m from pad · ${formatTime(run.duration)} flight${end.impactSpeed != null ? ` · ${formatNumber(end.impactSpeed, 1)} m/s at contact` : ''}.`); return;
     }
     const measured = end.x;
-    this.message(`Landed at ${measured.toFixed(1)} m along the surface · ${formatTime(run.duration)} flight.`);
+    this.message(`Landed at ${formatNumber(measured, 1)} m along the surface · ${formatTime(run.duration)} flight.`);
   }
   update() {
     const time = this.clock.time, run = this.run;
     this.get('flight-time').textContent = `${formatTime(time)}.${Math.floor(time * 10) % 10}`;
-    this.get('flight-rate').textContent = this.clock.paused && run ? 'Paused' : `${this.clock.mode === 'auto' ? 'Auto · ' : ''}${this.clock.rate.toFixed(1)}×`;
+    this.get('flight-rate').textContent = this.clock.paused && run ? 'Paused' : `${this.clock.mode === 'auto' ? 'Auto · ' : ''}${formatNumber(this.clock.rate, 1)}×`;
     const reduced = !!reducedMotionQuery?.matches;
     const handTime = reduced ? Math.floor(time) : time;
     this.get('clock-hand').setAttribute('transform', `rotate(${handTime * 6} 50 50)`);
     this.get('clock-minute').setAttribute('transform', `rotate(${handTime / 5} 50 64)`);
     this.get('flight-duration').textContent = run ? `${formatTime(time)} / ${formatTime(run.duration)}` : 'Ready to launch';
     this.input('flight-timeline').value = String(time);
-    this.input('flight-timeline').setAttribute('aria-valuetext', `${time.toFixed(1)} seconds of flight`);
+    this.input('flight-timeline').setAttribute('aria-valuetext', `${formatNumber(time, 1)} seconds of flight`);
     for (const id of ['flight-pause', 'flight-replay', 'flight-pin']) this.button(id).disabled = !run || this.busy;
     this.button('flight-next').disabled = !run || this.busy || time >= run.duration;
     this.input('flight-timeline').disabled = !run || this.busy;

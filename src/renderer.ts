@@ -10,6 +10,7 @@ import { cannonSceneTop, cannonSceneWidth, rocketCameraFraming, type RocketCamer
 import { ENVIRONMENTS, resolveEnvironment } from './environment.ts';
 import { surfacePosition, type SurfacePoint } from './spherical-world.ts';
 import { worldGlobe } from './world-globe.ts';
+import { InspectionCamera } from './inspection-camera.ts';
 
 /**
  * ============================================================================
@@ -150,6 +151,7 @@ var cameraY       = 0;     // world-space Y offset for vertical panning (metres)
 var targetCameraY = 0;
 var viewTransitionDuration = 1.2; // ~95% settle in ~1.2s by default
 var rocketCamera: RocketCameraRequest | null = null;
+const inspection = new InspectionCamera();
 var flightFocus: SurfacePoint = { x: 0, y: 0 };
 var cannonBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
 var cannonStart = { ppm: DEFAULT_PPM, x: 0, y: 0 };
@@ -278,6 +280,7 @@ function resize() {
   var bounds = canvas.getBoundingClientRect();
   W = Math.max(1, Math.round(bounds.width));
   H = Math.max(1, Math.round(bounds.height));
+  inspection.resize(W, H);
   pixelRatio = Math.max(1, window.devicePixelRatio || 1);
   canvas.width = Math.round(W * pixelRatio);
   canvas.height = Math.round(H * pixelRatio);
@@ -405,7 +408,12 @@ function resetZoom() { targetPPM = DEFAULT_PPM; }
 
 function setCameraTarget(x) { targetCameraX = x; }
 function setCameraImmediate(x) { cameraX = x; targetCameraX = x; }
-function resetCamera() { rocketCamera = null; cannonBounds = null; targetCameraX = 0; cameraX = 0; targetCameraY = 0; cameraY = 0; }
+function resetCamera() { inspection.active = false; rocketCamera = null; cannonBounds = null; targetCameraX = 0; cameraX = 0; targetCameraY = 0; cameraY = 0; }
+function setManualZoom(manual: boolean) {
+  if (manual && !inspection.active) {
+    inspection.start({ ppm: currentPPM, originX: projectionOriginX, originY: projectionOriginY }, W, H);
+  } else if (!manual) inspection.active = false;
+}
 function setCannonCamera(points: readonly SurfacePoint[], radius: number) {
   const projected = points.map(point => surfacePosition(point.x, point.y, radius));
   // At local scales the familiar launch-field framing remains sufficient.
@@ -488,34 +496,42 @@ function updateWorld(dt) {
   // First-order response where "duration" means ~95% settle time.
   var easingRate = 3 / viewTransitionDuration;
 
-  // Logarithmic zoom interpolation — zoom is multiplicative so log-space
-  // easing feels perceptually uniform (avoids the "fast then slow" jolt).
-  var zDiff = targetPPM - currentPPM;
-  if (currentPPM > 0 && targetPPM > 0) {
-    var logCur = Math.log(currentPPM);
-    var logTgt = Math.log(targetPPM);
-    var logDiff = logTgt - logCur;
-    if (Math.abs(logDiff) < 0.001) currentPPM = targetPPM;
-    else {
-      logCur += logDiff * (1-Math.exp(-Math.max(0,dt)*easingRate));
-      currentPPM = Math.exp(logCur);
+  if (!inspection.active) {
+    // Logarithmic zoom interpolation — zoom is multiplicative so log-space
+    // easing feels perceptually uniform (avoids the "fast then slow" jolt).
+    var zDiff = targetPPM - currentPPM;
+    if (currentPPM > 0 && targetPPM > 0) {
+      var logCur = Math.log(currentPPM);
+      var logTgt = Math.log(targetPPM);
+      var logDiff = logTgt - logCur;
+      if (Math.abs(logDiff) < 0.001) currentPPM = targetPPM;
+      else {
+        logCur += logDiff * (1-Math.exp(-Math.max(0,dt)*easingRate));
+        currentPPM = Math.exp(logCur);
+      }
+    } else {
+      currentPPM += zDiff * Math.min(1, dt * easingRate);
     }
+
+    // Smooth camera panning
+    var camDiff = targetCameraX - cameraX;
+    if (Math.abs(camDiff) < 0.01) cameraX = targetCameraX;
+    else cameraX += camDiff * Math.min(1, dt * easingRate);
+
+    var camDiffY = targetCameraY - cameraY;
+    if (Math.abs(camDiffY) < 0.01) cameraY = targetCameraY;
+    else cameraY += camDiffY * Math.min(1, dt * easingRate);
   } else {
-    currentPPM += zDiff * Math.min(1, dt * easingRate);
+    currentPPM = inspection.view.ppm;
   }
-
-  // Smooth camera panning
-  var camDiff = targetCameraX - cameraX;
-  if (Math.abs(camDiff) < 0.01) cameraX = targetCameraX;
-  else cameraX += camDiff * Math.min(1, dt * easingRate);
-
-  var camDiffY = targetCameraY - cameraY;
-  if (Math.abs(camDiffY) < 0.01) cameraY = targetCameraY;
-  else cameraY += camDiffY * Math.min(1, dt * easingRate);
 
   // Recompute groundY based on zoom and camera Y offset
   var zoomRatio = Math.min(1, currentPPM / DEFAULT_PPM);
   baseGroundY = H - Math.max(12, GROUND_OFFSET * zoomRatio);
+  if (inspection.active) {
+    cameraX = -inspection.view.originX / currentPPM;
+    cameraY = (inspection.view.originY - baseGroundY) / currentPPM;
+  }
   groundY = baseGroundY + cameraY * currentPPM;
 
   // Fade decorative surface detail as the same camera reveals the whole disc.
@@ -537,7 +553,7 @@ function updateWorld(dt) {
   }
 
   updateCurvature();
-  applyRocketCamera(); applyCannonCamera();
+  if (!inspection.active) { applyRocketCamera(); applyCannonCamera(); }
 
   computeEnvironment();
 }
@@ -563,12 +579,15 @@ function updateCurvature() {
   curveRadiusPx = curveRadius * currentPPM;
 
   // Half-angle subtended by half the viewport on the planet surface
-  var halfAngle = Math.min(Math.PI,(W * 0.5) / curveRadiusPx);
+  const originX = -cameraX * currentPPM;
+  var halfAngle = Math.min(Math.PI, Math.max(Math.abs(originX), Math.abs(W - originX)) / curveRadiusPx);
   // Sagitta: how many pixels the arc dips below a flat line across the viewport
   var sagitta = curveRadiusPx * (1 - Math.cos(halfAngle));
 
   // Switch before the approximation can move an object by a visible pixel.
-  curveActive = sagitta >= .05 || planetViewFrac > 0;
+  // Manual inspection can reach the far hemisphere even at a close zoom.
+  // The tangent approximation only applies above the world's centre.
+  curveActive = sagitta >= .05 || planetViewFrac > 0 || baseGroundY + cameraY * currentPPM + curveRadiusPx < H;
 
   updateProjectionOrigin();
 }
@@ -2584,6 +2603,11 @@ export const Renderer = {
   setRocketCamera: setRocketCamera,
   setCannonCamera,
   setFlightFocus,
+  setManualZoom,
+  isManualZoom: () => inspection.active,
+  zoomAt: (factor: number, from: { x: number; y: number }, to = from) => inspection.zoom(factor, from, to),
+  panView: (x: number, y: number) => inspection.pan(x, y),
+  centreView: (point: { x: number; y: number }) => inspection.centre(point),
   setBarrelLength: setBarrelLength,
   clear: clear,
   drawWorld: drawWorld,

@@ -134,7 +134,10 @@
 <label for="slider-force">Launch force</label>
 <button type="button" class="tooltip-trigger" aria-label="About Launch force" data-tip="&lt;b&gt;A bigger push&lt;/b&gt;&lt;br&gt;In this ideal launcher, force × barrel length becomes the ball’s kinetic energy. Double the force and the launch speed increases by √2.">?</button>
 </span>
-<output class="slider-value" id="val-force" for="slider-force">500 N</output>
+<select id="force-multiplier" class="force-multiplier" aria-label="Launch force multiplier" title="Multiply the launch force">
+<option value="1">×1</option><option value="10">×10</option><option value="100">×100</option>
+</select>
+<output class="slider-value" id="val-force" for="slider-force force-multiplier">500 N</output>
 </div>
 <input type="range" id="slider-force" min="50" max="5000" value="500" step="10" aria-label="Launch force">
 </div>

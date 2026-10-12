@@ -1,6 +1,6 @@
 import { RocketPropellants } from './rocket_propellants.ts';
 
-export const CANNON_DEFAULTS = Object.freeze({ angle: 45, mass: 5, force: 500, barrelLength: 2 });
+export const CANNON_DEFAULTS = Object.freeze({ angle: 45, mass: 5, force: 500, forceMultiplier: 1, barrelLength: 2 });
 // Enough upward thrust on every planetary preset, including dense Venus air.
 // The Sun's gravity still defeats this engine: that remains an experiment.
 export const ROCKET_DEFAULTS = Object.freeze({
@@ -9,7 +9,7 @@ export const ROCKET_DEFAULTS = Object.freeze({
   etaC: .95, etaN: .95, pitchEnd: 45, pitchT1: 5, pitchT2: 20, progradeVmin: 10,
 });
 
-const cannonFields = { angle: 'angle', mass: 'mass', force: 'force', barrelLength: 'barrel' };
+const cannonFields = { angle: 'angle', mass: 'mass', barrelLength: 'barrel' };
 const rocketFields = {
   MR: 'rocket-mr', Pc_bar: 'rocket-pc', epsilon: 'rocket-eps', throatDia_mm: 'rocket-dt',
   dryMass: 'rocket-drymass', propMass: 'rocket-propmass', launchAngle: 'rocket-angle',
@@ -30,6 +30,14 @@ export function setMixtureBounds(input: HTMLInputElement, propellantId: string) 
 
 /** Settings are scoped to one launcher. World selection is deliberately separate. */
 export function applyLaunchSettings(root: Pick<Document, 'querySelector'>, mode: 'cannon' | 'rocket', config: Record<string, any>) {
+  if (mode === 'cannon' && Number.isFinite(config.force)) {
+    // Record the effective force; restore its multiplier before setting the
+    // base slider so replay never clamps a large experiment to 5,000 N.
+    const valid = (multiple: number) => [1, 10, 100].includes(multiple) && config.force / multiple >= 50 && config.force / multiple <= 5000;
+    const multiple = valid(config.forceMultiplier) ? config.forceMultiplier : [1, 10, 100].find(valid) ?? 100;
+    root.querySelector<HTMLSelectElement>('#force-multiplier')!.value = String(multiple);
+    root.querySelector<HTMLInputElement>('#slider-force')!.value = String(config.force / multiple);
+  }
   if (mode === 'rocket') {
     const propellant = root.querySelector<HTMLSelectElement>('#rocket-propellant')!;
     if (config.propellantId) propellant.value = config.propellantId;

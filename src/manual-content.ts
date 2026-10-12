@@ -16,7 +16,7 @@ export const MANUAL_TOPICS = [
   {
     id: 'cannon', name: 'The cannon tab', title: 'Make a change. Watch the arc.',
     intro: 'Start with the two main sliders, then open the extra controls when you want to explore further.',
-    body: `<h3>Set up a flight</h3><p><b>Launch angle</b> changes the barrel’s direction. <b>Launch force</b> changes the push in this simplified experiment. Open <b>Ball & barrel</b> for the ball’s mass and the barrel’s length.</p>
+    body: `<h3>Set up a flight</h3><p><b>Launch angle</b> changes the barrel’s direction. <b>Launch force</b> changes the push in this simplified experiment. Its <b>×1 / ×10 / ×100</b> switch multiplies the slider’s force; the number in newtons shows the full push. Open <b>Ball & barrel</b> for the ball’s mass and the barrel’s length.</p>
     <p>Use <b>Let it fly</b> to launch. The <b>Flight measurements</b> section follows the ball as it travels. Try changing one setting at a time so the difference is easier to understand.</p>
     <h3>Try again</h3><p>Use <b>Reset</b> beside the launch button to unlock the setup controls and keep your settings. Use <b>Reset cannon settings</b> at the top of the cannon setup to restore the starting angle, force, mass and barrel length. Both keep your chosen world and last recording for replay or comparison.</p>
     <aside class="manual-note"><strong>Want to understand the settings?</strong><p>The learning companion explains the history and science, with three reading levels and an interactive cutaway cannon.</p><a href="#wiki/cannons/1">Read How a cannon works <span aria-hidden="true">↗</span></a></aside>`,
@@ -40,6 +40,7 @@ export const MANUAL_TOPICS = [
       <div><dt>Next moment</dt><dd>Jump to the next recorded event, such as burnout or landing. Playback pauses there for inspection.</dd></div>
       <div><dt>Replay</dt><dd>Watch the same recorded flight from the beginning, with its original setup.</dd></div>
       <div><dt>Time</dt><dd>Auto fits a complete flight into at most 20 seconds of viewing time, excluding pauses. Short flights stay at real time; longer ones start faster, ease a little near the peak and keep their pace through landing. Choose 1× for fixed real time, or 4×, 16× or 64× for a fixed faster speed. Changing playback speed never changes the physics.</dd></div>
+      <div><dt>Zoom</dt><dd>The small control at the bottom right starts in <b>Auto</b>, following the flight. <b>Manual</b> holds your view: scroll or pinch to zoom, drag to pan, or use − and +. Choose <b>Launch</b> or <b>Landing</b> (or their scene markers) to centre zoom there. Click empty space, drag, or click the selected site again to release it. Landing is available when the recorded flight has an impact. Keyboard users can focus the scene and use + / −, arrow keys and Escape. Camera inspection does not pause time; use Pause when you want a still moment.</dd></div>
       <div><dt>Reset</dt><dd>Return to the setup so you can make a new experiment. The recording is kept for replay.</dd></div>
     </dl>
     <p>The clock shows <b>time in the experiment</b>, not time spent watching. Opening this manual or the learning companion pauses the lab. Leaving the browser tab also pauses playback.</p>`,

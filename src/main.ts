@@ -10,6 +10,7 @@ import { RocketPropellants } from './rocket_propellants.ts';
 import { RocketPhysics } from './rocket_physics.ts';
 import { NozzleRender } from './nozzle_render.ts';
 import { Renderer } from './renderer.ts';
+import { ZoomControls } from './zoom-controls.ts';
 import { UI } from './ui.ts';
 import { characterForWorld } from './world-characters.ts';
 import { chooseIdleLook, clearRocketWatch, rocketWatchAim } from './crew-watch.ts';
@@ -43,6 +44,7 @@ const isReadingOpen = () => isWelcomeOpen() || isWikiOpen() || isManualOpen() ||
  */
 
 let deck: FlightDeck;
+let zoomControls: ZoomControls;
 let flightBuild: AbortController | null = null;
 let displayedFlightState:any=null;
 let viewActive = false;
@@ -840,7 +842,7 @@ function clearLandingPresentation() {
 // ── Zoom computation ───────────────────────────────────────────────────────
 let setupWidth = 0, setupHeight = 0;
 function frameCannonSetup() {
-  if (currentMode !== 'cannon' || viewActive || deck.busy) return;
+  if (currentMode !== 'cannon' || viewActive || deck.busy || Renderer.isManualZoom()) return;
   const values = UI.getValues();
   const rebuilding = barrelAnimState !== 'idle';
   const width = Renderer.getWidth(), height = Renderer.getHeight();
@@ -999,7 +1001,7 @@ function clearRange() {
 
 // ── Gravity / planet change handler (from UI) ──────────────────────────────
 function onGravityChange(g) {
-  if (!restoring && deck && (viewActive || shots.length)) clearRange();
+  if (!restoring && deck && (viewActive || shots.length || Renderer.isManualZoom())) clearRange();
   currentGravity = g; currentPlanetRadius = resolveEnvironment(g).radius;
   Renderer.setTargetGravity(g);
   UI.highlightNearestPlanet(g);
@@ -1209,11 +1211,11 @@ async function beginFlight(mode: 'cannon' | 'rocket', config: any, initial: any)
   }
 }
 
-function fitRun(run: FlightRecord) {
+function fitRun(run: FlightRecord, reset = true) {
   const baseline = compatibleRuns(run, deck.baseline) ? deck.baseline : null;
   maxRangeMetres = Math.max(1, run.maxX, baseline?.maxX || 0) - Math.min(0, run.minX, baseline?.minX || 0);
   maxHeightMetres = Math.max(2, run.maxHeight, baseline?.maxHeight || 0);
-  Renderer.resetCamera();
+  if (reset) Renderer.resetCamera();
   const margin = run.mode === 'rocket' ? (UI.getRocketZoomSettings().marginPercent / 100) : DEFAULT_CANNON_ZOOM_MARGIN;
   const duration = run.mode === 'rocket' ? UI.getRocketZoomSettings().durationSeconds : DEFAULT_CANNON_VIEW_SECONDS;
   Renderer.setViewTransitionDuration(reducedMotion() ? .01 : duration);
@@ -1427,6 +1429,8 @@ function loop(timestamp) {
   // Update renderer world (environment blend + zoom animation), then frame the
   // current rocket projection before anything is painted.
   Renderer.updateWorld(dt);
+  zoomControls.update(viewActive ? deck.run : null,
+    { x: currentMode === 'rocket' ? Renderer.TOWER_BASE_X_M : Renderer.CANNON_BASE_X_M, y: 0 });
 
   // ─── Animations ───
   if (currentMode === 'cannon') {
@@ -1684,6 +1688,11 @@ function boot() {
   });
 
   deck = new FlightDeck(document.querySelector('.canvas-area')!);
+  zoomControls = new ZoomControls(canvas);
+  zoomControls.onAuto = () => {
+    if (viewActive && deck.run) fitRun(deck.run, false);
+    else { Renderer.resetCamera(); Renderer.resetZoom(); }
+  };
   deck.onSeek = () => {
     if (!deck.run) return;
     if (!viewActive) restoreRun();
@@ -1710,11 +1719,11 @@ function boot() {
   Renderer.resize();
   window.addEventListener('resize', function () {
     Renderer.resize();
-    if (viewActive && deck.run) fitRun(deck.run);
+    if (viewActive && deck.run && !Renderer.isManualZoom()) fitRun(deck.run);
   });
   window.addEventListener('displaychange', () => Renderer.resize());
   new ResizeObserver(() => {
-    if (viewActive && deck.run?.mode === 'cannon') fitRun(deck.run);
+    if (viewActive && deck.run?.mode === 'cannon' && !Renderer.isManualZoom()) fitRun(deck.run);
   }).observe(canvas);
 
   // Sync initial barrel length from slider default

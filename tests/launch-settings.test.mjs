@@ -5,6 +5,7 @@ import { RocketPhysics } from '../src/rocket_physics.ts';
 import { Physics } from '../src/physics.ts';
 import { ENVIRONMENTS, resolveEnvironment } from '../src/environment.ts';
 import { recordFlight } from '../src/flight.ts';
+import { formatNumber } from '../src/number-format.ts';
 
 // Model the important native range behaviour: assigning bounds can clamp value
 // before the application gets to read it (the propellant-switch regression).
@@ -40,6 +41,27 @@ test('cannon edits and resets cannot change the rocket or chosen world', () => {
   assert.equal(h.nodes.has('#slider-gravity'), false, 'settings restoration does not select a world');
   assert.equal(h.value('#slider-angle'), '45');
   assert.equal(h.value('#slider-barrel'), '2');
+});
+
+test('multiplied cannon force survives replay, legacy restoration and reset', () => {
+  const h = controls();
+  h.root.querySelector('#slider-force').max = '5000';
+  for (const multiple of [1, 10, 100]) {
+    for (const base of [50, 500, 5000]) {
+      const force = base * multiple;
+      applyLaunchSettings(h.root, 'cannon', { force, forceMultiplier: multiple });
+      assert.equal(Number(h.value('#slider-force')), base);
+      assert.equal(Number(h.value('#force-multiplier')), multiple);
+      const speed = Physics.computeLaunchVelocity(force, 5, 2);
+      assert.ok(Math.abs(speed ** 2 * 5 / 2 - force * 2) < 1e-7, 'The effective force becomes launch energy');
+    }
+  }
+  applyLaunchSettings(h.root, 'cannon', { force: 500000 });
+  assert.equal(h.value('#slider-force'), '5000'); assert.equal(h.value('#force-multiplier'), '100');
+  applyLaunchSettings(h.root, 'cannon', CANNON_DEFAULTS);
+  assert.equal(h.value('#slider-force'), '500'); assert.equal(h.value('#force-multiplier'), '1');
+  assert.equal(formatNumber(500000), '500,000');
+  assert.equal(formatNumber(-1234567.8, 1), '-1,234,567.8');
 });
 
 test('rocket reset restores hidden workshop and guidance settings without changing the cannon', () => {

@@ -9,6 +9,7 @@ import { clampGravity } from './gravity-scale.ts';
 import { getWorldArt } from './world-art.ts';
 import { applyLaunchSettings, CANNON_DEFAULTS, ROCKET_DEFAULTS, setMixtureBounds } from './launch-settings.ts';
 import { protectTouchRange } from './touch-range.ts';
+import { formatNumber } from './number-format.ts';
 
 /**
  * ============================================================================
@@ -28,7 +29,7 @@ import { protectTouchRange } from './touch-range.ts';
  */
 
 // ── DOM references (populated in init) ─────────────────────────────────────
-var sliderAngle, sliderMass, sliderForce, sliderBarrel;
+var sliderAngle, sliderMass, sliderForce, sliderBarrel, forceMultiplier;
 var valAngle, valMass, valForce, valBarrel;
 var btnFire, btnClear;
 var planetButtons;
@@ -106,6 +107,8 @@ function init(callbacks) {
   sliderAngle = document.getElementById('slider-angle');
   sliderMass = document.getElementById('slider-mass');
   sliderForce = document.getElementById('slider-force');
+  forceMultiplier = document.getElementById('force-multiplier');
+  forceMultiplier.addEventListener('change', () => updateSliderDisplay(sliderForce, valForce, ' N'));
   sliderBarrel = document.getElementById('slider-barrel');
 
   // Value readouts next to sliders
@@ -263,11 +266,12 @@ function updateSliderDisplay(slider, display, unit) {
   var v = parseFloat(slider.value);
   // Format nicely
   if (unit === '°') {
-    display.textContent = v.toFixed(0) + unit;
+    display.textContent = formatNumber(v, 0) + unit;
   } else if (unit === ' N') {
-    display.textContent = v.toFixed(0) + unit;
+    display.textContent = formatNumber(v * Number(forceMultiplier.value)) + unit;
+    slider.setAttribute('aria-valuetext', display.textContent);
   } else {
-    display.textContent = v.toFixed(1) + unit;
+    display.textContent = formatNumber(v, 1) + unit;
   }
 }
 
@@ -305,7 +309,7 @@ function highlightPlanet(name) {
   }
   var env = resolveEnvironment(currentGravity());
   var label = document.getElementById('environment-label');
-  if (label) label.textContent = (env.interpolated ? 'Custom world' : env.name[0].toUpperCase() + env.name.slice(1)) + ' · ' + env.gravity.toFixed(2) + ' m/s²';
+  if (label) label.textContent = (env.interpolated ? 'Custom world' : env.name[0].toUpperCase() + env.name.slice(1)) + ' · ' + formatNumber(env.gravity, 2) + ' m/s²';
   // A custom (interpolated) world has no fact card; the nearest preset stays
   // highlighted in the grid, but its facts would be misleading here.
   updatePlanetFactButton(env.interpolated ? null : env.name);
@@ -704,20 +708,20 @@ function wireRocketSlider(slider, display, unit) {
 function updateRocketSliderDisplay(slider, display, unit) {
   var v = parseFloat(slider.value);
   if (unit === '°') {
-    display.textContent = v.toFixed(0) + unit;
+    display.textContent = formatNumber(v, 0) + unit;
   } else if (unit === ' bar' || unit === ' mm' || unit === ' kg' || unit === ' m/s' || unit === ' %') {
-    display.textContent = v.toFixed(0) + unit;
+    display.textContent = formatNumber(v, 0) + unit;
   } else if (unit === ' s') {
-    display.textContent = v.toFixed(1) + unit;
+    display.textContent = formatNumber(v, 1) + unit;
   } else {
     // No unit — format based on step precision
     var step = parseFloat(slider.step) || 1;
     if (step < 0.1) {
-      display.textContent = v.toFixed(2);
+      display.textContent = formatNumber(v, 2);
     } else if (step < 1) {
-      display.textContent = v.toFixed(1);
+      display.textContent = formatNumber(v, 1);
     } else {
-      display.textContent = v.toFixed(0);
+      display.textContent = formatNumber(v, 0);
     }
   }
 }
@@ -769,11 +773,11 @@ function updatePreLaunchReadouts(pre) {
   if (!pre) return;
 
   readRocketThrust.textContent = formatSI(pre.thrust) + 'N';
-  readRocketMdot.textContent = pre.mdot.toFixed(3) + ' kg/s';
-  readRocketIsp.textContent = pre.Isp.toFixed(1) + ' s';
+  readRocketMdot.textContent = formatNumber(pre.mdot, 3) + ' kg/s';
+  readRocketIsp.textContent = formatNumber(pre.Isp, 1) + ' s';
 
   // T/W with colour coding
-  readRocketTW.textContent = pre.tw.toFixed(2);
+  readRocketTW.textContent = formatNumber(pre.tw, 2);
   var canLaunch = pre.canLaunch !== undefined ? pre.canLaunch : pre.tw * Math.sin(getRocketValues().launchAngle * Math.PI / 180) > 1;
   readRocketTW.className = 'readout-value ' + (!canLaunch ? 'rocket-tw-warn' : 'rocket-tw-ok');
 
@@ -791,8 +795,8 @@ function updatePreLaunchReadouts(pre) {
     btnLaunch.classList.remove('caution');
   }
 
-  readRocketBurn.textContent = isFinite(pre.burnTime) ? pre.burnTime.toFixed(1) + ' s' : '---';
-  readRocketDV.textContent = pre.deltaV.toFixed(0) + ' m/s';
+  readRocketBurn.textContent = isFinite(pre.burnTime) ? formatNumber(pre.burnTime, 1) + ' s' : '---';
+  readRocketDV.textContent = formatNumber(pre.deltaV, 0) + ' m/s';
 }
 
 // ── Rocket flight readouts (live during flight) ────────────────────────────
@@ -803,11 +807,11 @@ function updateRocketReadouts(state, launchX?) {
     return;
   }
   var spd = Math.sqrt(state.vx * state.vx + state.vy * state.vy);
-  readRocketVelocity.textContent = spd.toFixed(1) + ' m/s';
-  readRocketHeight.textContent = Math.max(0, state.y).toFixed(1) + ' m';
+  readRocketVelocity.textContent = formatNumber(spd, 1) + ' m/s';
+  readRocketHeight.textContent = formatNumber(Math.max(0, state.y), 1) + ' m';
   var origin = Number.isFinite(launchX) ? launchX : 0;
-  readRocketRange.textContent = (state.x - origin).toFixed(1) + ' m';
-  readRocketProp.textContent = state.mProp.toFixed(1) + ' / ' + state.mPropInitial.toFixed(1) + ' kg';
+  readRocketRange.textContent = formatNumber(state.x - origin, 1) + ' m';
+  readRocketProp.textContent = formatNumber(state.mProp, 1) + ' / ' + formatNumber(state.mPropInitial, 1) + ' kg';
   readRocketImpulse.textContent = formatSI(state.totalImpulse) + 'N\u00B7s';
 
   // Extended live readouts
@@ -817,11 +821,11 @@ function updateRocketReadouts(state, launchX?) {
       : '0 N';
   }
   if (readRocketLiveMass) {
-    readRocketLiveMass.textContent = state.mass.toFixed(1) + ' kg';
+    readRocketLiveMass.textContent = formatNumber(state.mass, 1) + ' kg';
   }
   if (readRocketLiveIsp) {
     readRocketLiveIsp.textContent = state.engineOn && state.Isp > 0
-      ? state.Isp.toFixed(1) + ' s'
+      ? formatNumber(state.Isp, 1) + ' s'
       : '\u2014';
   }
   if (readRocketLiveTW) {
@@ -833,7 +837,7 @@ function updateRocketReadouts(state, launchX?) {
     var tw = state.mass > 0 && state.engineOn
       ? state.thrustMagnitude / (state.mass * localG)
       : 0;
-    readRocketLiveTW.textContent = tw > 0 ? tw.toFixed(2) : '\u2014';
+    readRocketLiveTW.textContent = tw > 0 ? formatNumber(tw, 2) : '\u2014';
     readRocketLiveTW.className = 'readout-value ' + (tw > 0 && tw < 1 ? 'rocket-tw-warn' : (tw >= 1 ? 'rocket-tw-ok' : ''));
   }
 
@@ -845,7 +849,7 @@ function updateRocketFuel(display: RocketDisplay) {
   const percent = display.fraction * 100;
   propGaugeOx.style.width = (percent * display.oxidiserFraction) + '%';
   propGaugeFuel.style.width = (percent * (1 - display.oxidiserFraction)) + '%';
-  readRocketProp.textContent = display.remaining.toFixed(1) + ' / ' + display.total.toFixed(1) + ' kg';
+  readRocketProp.textContent = formatNumber(display.remaining, 1) + ' / ' + formatNumber(display.total, 1) + ' kg';
   gauge.setAttribute('aria-valuenow', percent.toFixed(1));
   gauge.setAttribute('aria-valuetext', Math.round(percent) + '% remaining; ' + display.label);
   const status = document.getElementById('read-rocket-engine')!;
@@ -875,7 +879,7 @@ function resetRocketReadouts() {
 
 function showFizzleMessage(tw) {
   if (!fizzleMessage) return;
-  fizzleMessage.textContent = 'Upward thrust / weight was ' + tw.toFixed(2) +
+  fizzleMessage.textContent = 'Upward thrust / weight was ' + formatNumber(tw, 2) +
     '. The upward thrust must exceed the weight for immediate lift-off. Try less mass, more thrust, or a steeper angle.';
   fizzleMessage.classList.remove('fizzle-message-hidden');
 }
@@ -895,17 +899,17 @@ function hideFizzleMessage() {
  */
 function showPostFlightSummary(data) {
   if (!postFlightSummary) return;
-  readPostRange.textContent = data.range.toFixed(1) + ' m';
-  readPostFlightTime.textContent = data.flightTime.toFixed(1) + ' s';
-  readPostBurnTime.textContent = Number.isFinite(data.burnTime) ? data.burnTime.toFixed(1) + ' s' : 'No burnout';
+  readPostRange.textContent = formatNumber(data.range, 1) + ' m';
+  readPostFlightTime.textContent = formatNumber(data.flightTime, 1) + ' s';
+  readPostBurnTime.textContent = Number.isFinite(data.burnTime) ? formatNumber(data.burnTime, 1) + ' s' : 'No burnout';
   var idealDv = data.dvTsiolkovsky;
   // A collision while powered is not burnout. Keep the missing measurement
   // missing instead of fabricating a zero-speed burnout from the impact state.
   var burnoutSpeed = data.burnoutSpeed !== undefined ? data.burnoutSpeed : data.dvActual;
-  readPostDvTsiolkovsky.textContent = Number.isFinite(idealDv) ? idealDv.toFixed(0) + ' m/s' : '—';
-  readPostDvActual.textContent = Number.isFinite(burnoutSpeed) ? burnoutSpeed.toFixed(0) + ' m/s' : 'No burnout';
+  readPostDvTsiolkovsky.textContent = Number.isFinite(idealDv) ? formatNumber(idealDv, 0) + ' m/s' : '—';
+  readPostDvActual.textContent = Number.isFinite(burnoutSpeed) ? formatNumber(burnoutSpeed, 0) + ' m/s' : 'No burnout';
   readPostGravityLoss.textContent = Number.isFinite(idealDv) && Number.isFinite(burnoutSpeed)
-    ? (idealDv - burnoutSpeed).toFixed(0) + ' m/s'
+    ? formatNumber(idealDv - burnoutSpeed) + ' m/s'
     : '—';
   postFlightSummary.classList.remove('post-flight-hidden');
 }
@@ -920,7 +924,7 @@ function hidePostFlightSummary() {
 function formatSI(value) {
   if (value >= 1e6) return (value / 1e6).toFixed(2) + ' M';
   if (value >= 1e3) return (value / 1e3).toFixed(1) + ' k';
-  return value.toFixed(1) + ' ';
+  return formatNumber(value, 1) + ' ';
 }
 
 // ── Get current cannon values ──────────────────────────────────────────────
@@ -929,7 +933,8 @@ function getValues() {
   return {
     angle: parseFloat(sliderAngle.value),
     mass: parseFloat(sliderMass.value),
-    force: parseFloat(sliderForce.value),
+    force: parseFloat(sliderForce.value) * Number(forceMultiplier.value),
+    forceMultiplier: Number(forceMultiplier.value),
     barrelLength: parseFloat(sliderBarrel.value),
     gravity: currentGravity()
   };
@@ -951,14 +956,14 @@ function updateReadouts(state, energy, maxTME?) {
   }
 
   var spd = Physics.speed(state);
-  readVelocity.textContent = spd.toFixed(1) + ' m/s';
-  readHeight.textContent = Math.max(0, state.y).toFixed(1) + ' m';
-  readDistance.textContent = state.x.toFixed(1) + ' m';
+  readVelocity.textContent = formatNumber(spd, 1) + ' m/s';
+  readHeight.textContent = formatNumber(Math.max(0, state.y), 1) + ' m';
+  readDistance.textContent = formatNumber(state.x, 1) + ' m';
 
   if (energy) {
-    readKE.textContent = energy.ke.toFixed(0) + ' J';
-    readPE.textContent = energy.pe.toFixed(0) + ' J';
-    readTME.textContent = energy.tme.toFixed(0) + ' J';
+    readKE.textContent = formatNumber(energy.ke, 0) + ' J';
+    readPE.textContent = formatNumber(energy.pe, 0) + ' J';
+    readTME.textContent = formatNumber(energy.tme, 0) + ' J';
 
     // Energy bar: divide by launch TME so bar shows conservation visually
     var denom = (maxTME && maxTME > 0) ? maxTME : energy.tme;
