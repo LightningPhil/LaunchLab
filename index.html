@@ -207,6 +207,72 @@
       <section class="rocket-panel" id="rocket-panel" aria-label="Rocket settings" hidden>
 <button type="button" class="settings-reset" id="btn-rocket-settings-reset">Reset rocket settings <span aria-hidden="true">↺</span></button>
 <p class="settings-reset-note">Restore the starting rocket on your chosen world.</p>
+<details class="lab-details" id="rocket-guidance-panel">
+<summary id="guidance-summary">Guidance · Try an orbit</summary>
+<div class="details-content">
+<button type="button" class="settings-reset" id="btn-orbit-example">Load Earth orbit example <span aria-hidden="true">↗</span></button>
+<p class="settings-reset-note" id="orbit-example-note" role="status">Replaces this rocket and selects Earth. A 200 km example to load, then Lift off.</p>
+<div class="slider-row">
+<label for="rocket-guidance">Steering</label>
+<select id="rocket-guidance" class="rocket-select">
+<option value="fixed">Hold launch angle</option>
+<option value="pitch_program">Timed pitch</option>
+<option value="prograde_lock">Follow velocity</option>
+<option value="orbit_assist">Orbit assist</option>
+</select>
+<p class="field-note">The rocket’s nose shows thrust direction. Its velocity arrow shows where it is travelling.</p>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-orbit-sub">
+<div class="slider-row">
+<div class="slider-label-row"><label for="slider-rocket-orbit-altitude">Target orbit altitude</label>
+<output class="slider-value" id="val-rocket-orbit-altitude" for="slider-rocket-orbit-altitude">200 km</output></div>
+<input type="range" id="slider-rocket-orbit-altitude" min="10" max="2000" value="200" step="10" aria-label="Target orbit altitude">
+</div>
+<p class="field-note">Starts upright, turns and throttles toward a circular orbit, then saves the remaining fuel. Your engine still needs enough thrust and propellant. Air drag is not modelled.</p>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-pitch-sub">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-end">Final angle</label>
+</span>
+<output class="slider-value" id="val-rocket-pitch-end" for="slider-rocket-pitch-end">45°</output>
+</div>
+<input type="range" id="slider-rocket-pitch-end" min="0" max="89" value="45" step="1" aria-label="Final angle">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-t1">Start turning at</label>
+</span>
+<output class="slider-value" id="val-rocket-pitch-t1" for="slider-rocket-pitch-t1">5 s</output>
+</div>
+<input type="range" id="slider-rocket-pitch-t1" min="0" max="60" value="5" step="0.5" aria-label="Start turning at">
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-t2">Finish turning at</label>
+</span>
+<output class="slider-value" id="val-rocket-pitch-t2" for="slider-rocket-pitch-t2">20 s</output>
+</div>
+<input type="range" id="slider-rocket-pitch-t2" min="1" max="120" value="20" step="0.5" aria-label="Finish turning at">
+</div>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-prograde-sub">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-prograde-vmin">Follow above speed</label>
+</span>
+<output class="slider-value" id="val-rocket-prograde-vmin" for="slider-rocket-prograde-vmin">10 m/s</output>
+</div>
+<input type="range" id="slider-rocket-prograde-vmin" min="1" max="100" value="10" step="1" aria-label="Follow above speed">
+</div>
+</div>
+</div>
+</details>
+<p class="field-note" id="orbit-plan-note" hidden></p>
 <div class="slider-group">
 <div class="slider-row">
 <div class="slider-label-row force-label-row">
@@ -265,7 +331,7 @@
 <span class="readout-label">Lowest point</span><span class="readout-value" id="read-rocket-periapsis">—</span>
 <span class="readout-label">Highest point</span><span class="readout-value" id="read-rocket-apoapsis">—</span>
 </div>
-<p class="field-note">A lowest point below 0 km means the path meets the world.</p>
+<p class="field-note" id="rocket-orbit-note">This path returns to the surface.</p>
 </div>
 <p class="engine-state" id="read-rocket-engine" role="status">Tanks ready</p>
 <div class="prop-gauge-container" id="prop-gauge" role="progressbar" aria-label="Propellant remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
@@ -412,71 +478,7 @@
 </div>
 </div>
 </details>
-<details class="lab-details">
-<summary>Guidance</summary>
-<div class="details-content">
-<button type="button" class="settings-reset" id="btn-orbit-example">Load Earth orbit example <span aria-hidden="true">↗</span></button>
-<p class="settings-reset-note">A ready-to-launch rocket aiming for 200 km above Earth. Load it, then Lift off.</p>
-<div class="slider-row">
-<label for="rocket-guidance">Steering</label>
-<select id="rocket-guidance" class="rocket-select">
-<option value="fixed">Hold launch angle</option>
-<option value="pitch_program">Timed pitch</option>
-<option value="prograde_lock">Follow velocity</option>
-<option value="orbit_assist">Orbit assist</option>
-</select>
-<p class="field-note">The rocket’s nose shows thrust direction. Its velocity arrow shows where it is travelling.</p>
-</div>
-<div class="guidance-sub guidance-sub-hidden" id="guidance-orbit-sub">
-<div class="slider-row">
-<div class="slider-label-row"><label for="slider-rocket-orbit-altitude">Target orbit altitude</label>
-<output class="slider-value" id="val-rocket-orbit-altitude" for="slider-rocket-orbit-altitude">200 km</output></div>
-<input type="range" id="slider-rocket-orbit-altitude" min="10" max="2000" value="200" step="10" aria-label="Target orbit altitude">
-</div>
-<p class="field-note">Starts upright, turns and throttles toward a circular orbit, then saves the remaining fuel. Your engine still needs enough thrust and propellant. Air drag is not modelled.</p>
-</div>
-<div class="guidance-sub guidance-sub-hidden" id="guidance-pitch-sub">
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-pitch-end">Final angle</label>
-</span>
-<output class="slider-value" id="val-rocket-pitch-end" for="slider-rocket-pitch-end">45°</output>
-</div>
-<input type="range" id="slider-rocket-pitch-end" min="0" max="89" value="45" step="1" aria-label="Final angle">
-</div>
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-pitch-t1">Start turning at</label>
-</span>
-<output class="slider-value" id="val-rocket-pitch-t1" for="slider-rocket-pitch-t1">5 s</output>
-</div>
-<input type="range" id="slider-rocket-pitch-t1" min="0" max="60" value="5" step="0.5" aria-label="Start turning at">
-</div>
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-pitch-t2">Finish turning at</label>
-</span>
-<output class="slider-value" id="val-rocket-pitch-t2" for="slider-rocket-pitch-t2">20 s</output>
-</div>
-<input type="range" id="slider-rocket-pitch-t2" min="1" max="120" value="20" step="0.5" aria-label="Finish turning at">
-</div>
-</div>
-<div class="guidance-sub guidance-sub-hidden" id="guidance-prograde-sub">
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-prograde-vmin">Follow above speed</label>
-</span>
-<output class="slider-value" id="val-rocket-prograde-vmin" for="slider-rocket-prograde-vmin">10 m/s</output>
-</div>
-<input type="range" id="slider-rocket-prograde-vmin" min="1" max="100" value="10" step="1" aria-label="Follow above speed">
-</div>
-</div>
-</div>
-</details>
+
 </section>
       <footer class="lab-footer">Launch. Wonder. Tweak. Repeat.<span>Small experiments, wonderfully big questions.</span>
 </footer>

@@ -8,7 +8,11 @@ Use **Rocket → Guidance → Load Earth orbit example**, then **Lift off**. Thi
 
 The controller shuts down when both predicted apsides are within 2% of the target altitude and the bound path clears the world. Cutoff is refined within the physical step, and remaining fuel/mass are retained. An insufficient design can exhaust its fuel, hit the surface or fail to lift off. The original fixed-angle, timed-pitch and velocity-following choices still work. This release automates a continuous ascent burn; manual engine restarts and live piloting are future extensions.
 
-The sidebar's lowest/highest point values describe the trajectory **if the engine stopped now** while powered. After cutoff they describe the unpowered trajectory. The common classifier confirms an orbit only for negative specific energy and a periapsis more than one metre above the reference surface. Cannon behaviour is unchanged.
+Guidance is near the top of Rocket setup, ahead of the engine workshop. Its collapsed title shows the selected orbit target; the planning note explains the sideways speed needed on the selected world. Loading the Earth example explicitly replaces the rocket and selects Earth, with a confirmation beside the button. It never launches automatically.
+
+The sidebar's lowest/highest point values describe the trajectory **if the engine stopped now** while powered. After cutoff they describe the unpowered trajectory. Surface-intersecting paths say **Meets the surface** instead of displaying a fictional underground destination. Grounded rockets hide this path readout. The common classifier confirms an orbit only for negative specific energy and a periapsis more than one metre above the reference surface. Cannon behaviour is unchanged.
+
+An assisted attempt that lands has a visible result explaining whether it ran out of fuel, its maximum altitude, and how to try again. More fuel is explicitly described as more weight, rather than a guaranteed fix.
 
 ## Coast, recording and playback
 
@@ -16,7 +20,9 @@ The sidebar's lowest/highest point values describe the trajectory **if the engin
 
 Flight records include one complete orbital period after insertion, sampled uniformly in eccentric anomaly to resolve the fast periapsis passage. Pause, scrubbing and playback evaluate the same canonical orbit. **Continue orbiting** extends the observation time; it retains one geometric circuit and bounded event/sample data rather than accumulating repeated traces. A complete first orbit receives about 20 real viewing seconds: eight for ascent and twelve for the coast. Later circuits take twelve more in Auto; fixed-speed choices retain their actual multipliers.
 
-Once insertion is reached, Auto camera framing includes the whole ellipse so it remains stable as the rocket returns to the launch side. Manual camera inspection still works independently. There is no landing marker for an orbital flight. The result card explains the pause and offers continuation or replay.
+Once insertion is reached, Auto camera framing includes the whole ellipse so it remains stable as the rocket returns to the launch side. Manual camera inspection still works independently. There is no landing marker for an orbital flight. The compact result card offers **Continue orbiting** and **Inspect orbit** (paused, with Manual zoom). Period, retained fuel and model limitations are available under **Orbit details**. Playback controls still offer replay.
+
+Reset, loading another example, or editing a completed experiment returns to **Ready to launch**. The old recording remains explicitly available as **Replay previous**, which restores its original settings. Resume and timeline inspection are disabled in this setup state, preventing the previous flight from appearing under edited labels. Next moment exposes the destination event and time in its tooltip.
 
 ## Model and verification
 

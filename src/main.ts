@@ -1692,7 +1692,8 @@ function boot() {
       }
     },
     onRocketLaunch: rocketLaunch,
-    onRocketClear: clearRange
+    onRocketClear: clearRange,
+    onSetupChange: () => { if (viewActive && !setupLocked()) clearRange(); }
   });
 
   deck = new FlightDeck(document.querySelector('.canvas-area')!);
@@ -1709,6 +1710,7 @@ function boot() {
     ensureCrewFlight();
   };
   deck.onReplay = () => { restoreRun(); syncEngineAudio(); };
+  deck.onInspect = () => { Renderer.setManualZoom(true); canvas.focus({ preventScroll: true }); };
   // Unlock on the user's gesture, before asynchronous flight recording can
   // lose browser activation. A suspended context used to remain silent.
   const unlockFlightAudio = async () => {

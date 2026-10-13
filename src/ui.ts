@@ -2,7 +2,8 @@ import type { RocketDisplay } from './rocket-presentation.ts';
 import { Physics } from './physics.ts';
 import { RocketPropellants } from './rocket_propellants.ts';
 import { RocketPhysics } from './rocket_physics.ts';
-import { ENVIRONMENTS, resolveEnvironment, classifyTrajectory } from './environment.ts';
+import { ENVIRONMENTS, resolveEnvironment } from './environment.ts';
+import { orbitPathFeedback } from './orbit-feedback.ts';
 import { getPlanetFact } from './planet-facts.ts';
 import { installFactExplanations, updateFactLabels } from './fact-dialog.ts';
 import { clampGravity } from './gravity-scale.ts';
@@ -98,6 +99,11 @@ function init(callbacks) {
   onModeChange = callbacks.onModeChange || null;
   onRocketLaunch = callbacks.onRocketLaunch || null;
   onRocketClear = callbacks.onRocketClear || null;
+  // Once a flight has ended, the first edit starts a fresh setup. Otherwise
+  // edited labels would describe the old recording when resuming/inspecting it.
+  for (const event of ['input', 'change']) document.querySelector('.controls-scroll')!.addEventListener(event, () => {
+    if (!isFlightActive) callbacks.onSetupChange?.();
+  }, true);
 
   // Mode toggle
   cannonPanel = document.getElementById('cannon-panel');
@@ -599,6 +605,7 @@ function initRocketPanel() {
     if (isFlightActive) return;
     onRocketClear?.();
     restoreFlightConfig('rocket', EARTH_ORBIT_EXAMPLE);
+    document.getElementById('orbit-example-note')!.textContent = 'Earth example loaded · 200 km target. Press Lift off when you’re ready.';
   });
 
   // Guidance mode dropdown
@@ -790,6 +797,16 @@ function refreshPreLaunch() {
   // Full-run measurements come from the actual recorded flight. In particular,
   // an arbitrary prediction horizon must never masquerade as a reached apex.
   updatePreLaunchReadouts(pre);
+  const assisted = vals.guidanceMode === 'orbit_assist';
+  document.getElementById('guidance-summary')!.textContent = assisted
+    ? `Guidance · Orbit assist · ${formatNumber(vals.orbitAltitudeKm)} km` : 'Guidance · Try an orbit';
+  const note = document.getElementById('orbit-plan-note')!;
+  note.hidden = !assisted;
+  const environment = resolveEnvironment(gravity);
+  const speed = Math.sqrt(gravity * environment.radius ** 2 / (environment.radius + vals.orbitAltitudeKm * 1000));
+  const world = environment.interpolated ? 'this world' : environment.name[0].toUpperCase() + environment.name.slice(1);
+  note.textContent = `Orbit assist starts upright: ${formatNumber(vals.orbitAltitudeKm)} km above ${world} needs about ${formatNumber(speed)} m/s sideways. Your engine and fuel still do the work.`;
+  document.getElementById('orbit-example-note')!.textContent = 'Replaces this rocket and selects Earth. A 200 km example to load, then Lift off.';
 }
 
 function updatePreLaunchReadouts(pre) {
@@ -837,14 +854,13 @@ function updateRocketReadouts(state, launchX?) {
   const fuelDigits = state.mPropInitial >= 10000 ? 0 : 1;
   readRocketProp.textContent = formatNumber(state.mProp, fuelDigits) + ' / ' + formatNumber(state.mPropInitial, fuelDigits) + ' kg';
   readRocketImpulse.textContent = formatSI(state.totalImpulse) + 'N\u00B7s';
-  const orbit = classifyTrajectory({ ...state, engineOn: false }, currentGravity());
+  const orbit = orbitPathFeedback(state, currentGravity());
   const orbitReadout = document.getElementById('rocket-orbit-readout')!;
-  orbitReadout.hidden = !(state.planetRadius > 0);
-  document.getElementById('rocket-orbit-caption')!.textContent = state.engineOn ? 'If the engine stopped now' : 'Unpowered path';
-  document.getElementById('read-rocket-periapsis')!.textContent = orbit.periapsisAltitude === null ? '—'
-    : formatNumber(orbit.periapsisAltitude / 1000, 1) + ' km';
-  document.getElementById('read-rocket-apoapsis')!.textContent = orbit.apoapsisAltitude === null ? 'Open path'
-    : formatNumber(orbit.apoapsisAltitude / 1000, 1) + ' km';
+  orbitReadout.hidden = !orbit.visible;
+  document.getElementById('rocket-orbit-caption')!.textContent = orbit.caption;
+  document.getElementById('read-rocket-periapsis')!.textContent = orbit.lowest;
+  document.getElementById('read-rocket-apoapsis')!.textContent = orbit.highest;
+  document.getElementById('rocket-orbit-note')!.textContent = orbit.note;
 
   // Extended live readouts
   if (readRocketLiveThrust) {

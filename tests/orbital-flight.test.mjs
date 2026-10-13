@@ -7,6 +7,7 @@ import { RocketPhysics } from '../src/rocket_physics.ts';
 import { ENVIRONMENTS, resolveEnvironment, classifyTrajectory } from '../src/environment.ts';
 import { EARTH_ORBIT_EXAMPLE, ROCKET_DEFAULTS } from '../src/launch-settings.ts';
 import { PlaybackClock, automaticRate } from '../src/playback.ts';
+import { orbitPathFeedback, orbitAttemptFeedback } from '../src/orbit-feedback.ts';
 
 function settings(gravity = 9.81, changes = {}) {
   const environment = resolveEnvironment(gravity);
@@ -70,6 +71,7 @@ test('Earth example and lunar orbit assist reach real unpowered orbits with fuel
     const c = settings(g, { orbitAltitudeKm: height });
     const run = await recordFlight('rocket', c, RocketPhysics.createRocketState(c));
     assert.equal(run.outcome, 'orbit'); assert.ok(run.orbit);
+    assert.equal(orbitAttemptFeedback(run), null);
     const cutoff = run.events.find(event => event.kind === 'burnout');
     assert.ok(run.orbit.initial.time >= cutoff.time && run.orbit.initial.time - cutoff.time <= 1 / 120);
     assert.ok(run.orbit.periapsisAltitude >= height * 1000 * .98 - .0001);
@@ -87,6 +89,10 @@ test('Earth example and lunar orbit assist reach real unpowered orbits with fuel
     assert.ok(Math.hypot(end.wx - run.orbit.initial.wx, end.wy - run.orbit.initial.wy) < .001, 'One complete physical circuit');
     assert.equal(end.mProp, at.mProp); assert.equal(end.totalImpulse, at.totalImpulse);
     assert.equal(end.engineOn, false); assert.equal(end.thrustMagnitude, 0);
+    const feedback = orbitPathFeedback(end, g);
+    assert.equal(feedback.visible, true);
+    assert.match(feedback.caption, /Orbit established/);
+    assert.match(feedback.lowest, /km/);
     for (const fps of [30, 60, 144]) {
       const clock = new PlaybackClock(); clock.load(run);
       let frames = 0;
@@ -112,9 +118,30 @@ test('orbit assist does not manufacture thrust, fuel or a successful orbit for i
   const run = await recordFlight('rocket', c, RocketPhysics.createRocketState(c));
   assert.equal(run.outcome, 'impact'); assert.equal(run.orbit, undefined);
   assert.equal(run.samples.at(-1).mProp, 0);
+  assert.match(orbitAttemptFeedback(run), /Fuel ran out/);
+  assert.match(orbitAttemptFeedback(run), /Earth orbit example/);
+  assert.equal(orbitPathFeedback(run.samples.at(-1), c.gravity).visible, false,
+    'Landed rockets must not display a fictional underground orbit');
+  const falling = sampleFlight(run, run.duration - 1);
+  assert.equal(orbitPathFeedback(falling, c.gravity).lowest, 'Meets the surface');
+  assert.match(orbitPathFeedback(falling, c.gravity).note, /returns to the surface/);
   assert.equal(continueOrbit(run), false);
   for (const sample of run.samples) {
     assert.ok(sample.mProp >= 0 && sample.mProp <= c.propMass);
     assert.ok(sample.mass >= c.dryMass);
   }
+});
+
+test('path guidance distinguishes climbing, orbiting and escaping without underground destinations', () => {
+  const { planetRadius: R, gravity: g } = settings();
+  const hop = Physics.createProjectile(0, 1000, 100, 90, 100, R);
+  const powered = orbitPathFeedback({ ...hop, engineOn: true }, g);
+  assert.equal(powered.caption, 'If the engine stopped now');
+  assert.equal(powered.lowest, 'Meets the surface');
+  assert.match(powered.note, /sideways speed/);
+  const escaping = Physics.createProjectile(0, 100000, 15000, 45, 100, R);
+  assert.equal(orbitPathFeedback(escaping, g).highest, 'Open path');
+  assert.match(orbitPathFeedback(escaping, g).note, /escape/);
+  const grounded = RocketPhysics.createRocketState(settings());
+  assert.equal(orbitPathFeedback(grounded, g).visible, false);
 });

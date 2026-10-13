@@ -51,7 +51,7 @@ export function installResponsiveLayout() {
   const sketch = document.createElement('details');
   sketch.className = 'lab-details compact-nozzle';
   sketch.innerHTML = '<summary>Nozzle Sketch</summary><div class="details-content"><canvas aria-label="Rocket nozzle sketch. Flow and engine state follow the recorded flight."></canvas></div>';
-  document.querySelector('#rocket-panel > details')!.after(sketch);
+  document.getElementById('rocket-flight-data')!.closest('details')!.after(sketch);
   setupNozzle = sketch.querySelector('canvas')!;
 
   function setOpen(value: boolean, restoreFocus = false) {
