@@ -1,6 +1,6 @@
 # Rocket orbital flight
 
-Use **Rocket → Guidance → Load Earth orbit example**, then **Lift off**. This sets Earth, LOX/LH2, 100 kg empty mass, 5,000 kg propellant, 100 bar chamber pressure, a 100 mm throat, expansion ratio 20 and 95% efficiencies. Orbit assist targets 200 km. It reaches approximately 198–204 km after about 345 simulated seconds, retaining roughly 321 kg of propellant; the orbital period is about 88 minutes. The same engine on the Moon with a 50 km target also reaches orbit. These are model demonstrations, not real vehicle designs.
+Use **Rocket → Try an Earth orbit**, then **Lift off**. This sets Earth, LOX/LH2, 100 kg empty mass, 5,000 kg propellant, 100 bar chamber pressure, a 100 mm throat, expansion ratio 20 and 95% efficiencies. Orbit assist targets 200 km. It reaches approximately 198–204 km after about 345 simulated seconds, retaining roughly 321 kg of propellant; the orbital period is about 88 minutes. The same engine on the Moon with a 50 km target also reaches orbit. These are model demonstrations, not real vehicle designs.
 
 ## Powered ascent
 
@@ -8,7 +8,7 @@ Use **Rocket → Guidance → Load Earth orbit example**, then **Lift off**. Thi
 
 The controller shuts down when both predicted apsides are within 2% of the target altitude and the bound path clears the world. Cutoff is refined within the physical step, and remaining fuel/mass are retained. An insufficient design can exhaust its fuel, hit the surface or fail to lift off. The original fixed-angle, timed-pitch and velocity-following choices still work. This release automates a continuous ascent burn; manual engine restarts and live piloting are future extensions.
 
-Guidance is near the top of Rocket setup, ahead of the engine workshop. Its collapsed title shows the selected orbit target; the planning note explains the sideways speed needed on the selected world. Loading the Earth example explicitly replaces the rocket and selects Earth, with a confirmation beside the button. It never launches automatically.
+The always-visible **Steer your rocket** section at the top of Rocket setup exposes the steering selector and **Try an Earth orbit** button. Each plan explains how it steers; its relevant settings appear immediately. The example selects Earth and a suitable rocket, confirms that Orbit assist is selected, and directs the user to Lift off. It never launches automatically. Steering is planned before launch; live piloting is not implemented.
 
 The sidebar's lowest/highest point values describe the trajectory **if the engine stopped now** while powered. After cutoff they describe the unpowered trajectory. Surface-intersecting paths say **Meets the surface** instead of displaying a fictional underground destination. Grounded rockets hide this path readout. The common classifier confirms an orbit only for negative specific energy and a periapsis more than one metre above the reference surface. Cannon behaviour is unchanged.
 

@@ -62,6 +62,16 @@ button { touch-action: manipulation; }
 .settings-reset { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:44px; padding:9px 12px; border:1px solid #bdcdb7; border-radius:9px; color:#315f4c; background:#eef2e6; font-size:12px; font-weight:650; }
 .settings-reset:hover { background:#e3ebd9; }
 .settings-reset-note { margin:6px 0 16px; color:var(--text-dim); font-size:11px; line-height:1.5; }
+.rocket-steering { display:flex; flex-direction:column; gap:14px; margin:16px 0; padding:14px; border:1px solid #c5d4bd; border-radius:12px; background:#f1f5e9; }
+.rocket-steering .section-header { font-family:var(--font-serif); font-size:19px; }
+.rocket-steering .field-note { margin:0; }
+.rocket-steering .slider-row { margin:0; }
+.rocket-steering #steering-help { margin-top:8px; }
+.orbit-example .settings-reset { background:#e0ebce; border-color:#90ae80; }
+.orbit-example .settings-reset:hover:enabled { background:#d4e3bc; }
+.orbit-example .settings-reset-note { margin:7px 0 0; }
+.orbit-example-loaded .orbit-example { padding:10px; margin:-10px; border-radius:10px; background:#e0ebce; }
+.orbit-example-loaded #orbit-example-note { color:#245846; font-weight:600; }
 .controls-scroll input[type='range'] { touch-action:pan-y; }
 .btn-launch.caution { background: #a95d3e; border-color: #854731; box-shadow: 0 3px 0 #83462f; }
 #flight-lock-note { margin-top: 10px; }

@@ -26,5 +26,5 @@ export function orbitAttemptFeedback(run: FlightRecord): string | null {
   const end = run.samples[run.samples.length - 1];
   const cause = end.mProp <= 1e-8 ? 'Fuel ran out before the path cleared the world.'
     : 'The rocket returned to the surface before reaching a safe orbit.';
-  return `${cause} Highest altitude: ${formatNumber(run.maxHeight / 1000, 1)} km. Try the Earth orbit example in Guidance, or adjust the fuel and engine together: extra fuel also adds weight.`;
+  return `${cause} Highest altitude: ${formatNumber(run.maxHeight / 1000, 1)} km. Use “Try an Earth orbit” in Rocket setup, or adjust the fuel and engine together: extra fuel also adds weight.`;
 }

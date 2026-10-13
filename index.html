@@ -205,22 +205,22 @@
 </details>
 </section>
       <section class="rocket-panel" id="rocket-panel" aria-label="Rocket settings" hidden>
-<button type="button" class="settings-reset" id="btn-rocket-settings-reset">Reset rocket settings <span aria-hidden="true">↺</span></button>
-<p class="settings-reset-note">Restore the starting rocket on your chosen world.</p>
-<details class="lab-details" id="rocket-guidance-panel">
-<summary id="guidance-summary">Guidance · Try an orbit</summary>
-<div class="details-content">
-<button type="button" class="settings-reset" id="btn-orbit-example">Load Earth orbit example <span aria-hidden="true">↗</span></button>
-<p class="settings-reset-note" id="orbit-example-note" role="status">Replaces this rocket and selects Earth. A 200 km example to load, then Lift off.</p>
+<section class="rocket-steering" id="rocket-guidance-panel" aria-labelledby="steering-title">
+<h2 class="section-header" id="steering-title">Steer your rocket</h2>
+<p class="field-note">Choose a plan before Lift off. The rocket follows it automatically.</p>
+<div class="orbit-example">
+<button type="button" class="settings-reset" id="btn-orbit-example">Try an Earth orbit <span aria-hidden="true">↗</span></button>
+<p class="settings-reset-note" id="orbit-example-note" role="status">1. Load this example. 2. Press Lift off. It selects Earth and a rocket ready for a 200 km orbit.</p>
+</div>
 <div class="slider-row">
-<label for="rocket-guidance">Steering</label>
-<select id="rocket-guidance" class="rocket-select">
+<label for="rocket-guidance">Steering plan</label>
+<select id="rocket-guidance" class="rocket-select" aria-describedby="steering-help">
 <option value="fixed">Hold launch angle</option>
 <option value="pitch_program">Timed pitch</option>
 <option value="prograde_lock">Follow velocity</option>
 <option value="orbit_assist">Orbit assist</option>
 </select>
-<p class="field-note">The rocket’s nose shows thrust direction. Its velocity arrow shows where it is travelling.</p>
+<p class="field-note" id="steering-help">Hold the Launch angle below throughout the engine burn.</p>
 </div>
 <div class="guidance-sub guidance-sub-hidden" id="guidance-orbit-sub">
 <div class="slider-row">
@@ -228,7 +228,7 @@
 <output class="slider-value" id="val-rocket-orbit-altitude" for="slider-rocket-orbit-altitude">200 km</output></div>
 <input type="range" id="slider-rocket-orbit-altitude" min="10" max="2000" value="200" step="10" aria-label="Target orbit altitude">
 </div>
-<p class="field-note">Starts upright, turns and throttles toward a circular orbit, then saves the remaining fuel. Your engine still needs enough thrust and propellant. Air drag is not modelled.</p>
+<p class="field-note" id="orbit-plan-note" hidden></p>
 </div>
 <div class="guidance-sub guidance-sub-hidden" id="guidance-pitch-sub">
 <div class="slider-row">
@@ -270,9 +270,9 @@
 <input type="range" id="slider-rocket-prograde-vmin" min="1" max="100" value="10" step="1" aria-label="Follow above speed">
 </div>
 </div>
-</div>
-</details>
-<p class="field-note" id="orbit-plan-note" hidden></p>
+</section>
+<button type="button" class="settings-reset" id="btn-rocket-settings-reset">Reset rocket settings <span aria-hidden="true">↺</span></button>
+<p class="settings-reset-note">Restore the starting rocket on your chosen world.</p>
 <div class="slider-group">
 <div class="slider-row">
 <div class="slider-label-row force-label-row">

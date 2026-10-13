@@ -119,7 +119,7 @@ test('orbit assist does not manufacture thrust, fuel or a successful orbit for i
   assert.equal(run.outcome, 'impact'); assert.equal(run.orbit, undefined);
   assert.equal(run.samples.at(-1).mProp, 0);
   assert.match(orbitAttemptFeedback(run), /Fuel ran out/);
-  assert.match(orbitAttemptFeedback(run), /Earth orbit example/);
+  assert.match(orbitAttemptFeedback(run), /Try an Earth orbit/);
   assert.equal(orbitPathFeedback(run.samples.at(-1), c.gravity).visible, false,
     'Landed rockets must not display a fictional underground orbit');
   const falling = sampleFlight(run, run.duration - 1);

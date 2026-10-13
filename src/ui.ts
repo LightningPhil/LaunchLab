@@ -605,7 +605,8 @@ function initRocketPanel() {
     if (isFlightActive) return;
     onRocketClear?.();
     restoreFlightConfig('rocket', EARTH_ORBIT_EXAMPLE);
-    document.getElementById('orbit-example-note')!.textContent = 'Earth example loaded · 200 km target. Press Lift off when you’re ready.';
+    document.getElementById('orbit-example-note')!.textContent = 'Ready! Earth, a suitable rocket and Orbit assist are selected. Now press Lift off — the rocket will steer itself.';
+    document.getElementById('rocket-guidance-panel')!.classList.add('orbit-example-loaded');
   });
 
   // Guidance mode dropdown
@@ -705,6 +706,13 @@ function onPropellantChange() {
 
 function updateGuidanceSubPanels() {
   var mode = rocketGuidanceSelect.value;
+  const explanations = {
+    fixed: 'Hold the Launch angle below throughout the engine burn.',
+    pitch_program: 'Turn from the Launch angle to the Final angle between the two times below. These are flight seconds, shown on the clock.',
+    prograde_lock: 'Point the nose along the direction of travel once the speed below is reached. Start with the Launch angle.',
+    orbit_assist: 'Start upright, turn sideways and adjust thrust automatically. The engine stops when the orbit is reached. Try the Earth example above for a suitable rocket.',
+  };
+  document.getElementById('steering-help')!.textContent = explanations[mode] || explanations.fixed;
   guidanceOrbitSub.classList.toggle('guidance-sub-hidden', mode !== 'orbit_assist');
   if (mode === 'orbit_assist') {
     sliderRocketAngle.value = '90'; updateRocketSliderDisplay(sliderRocketAngle, valRocketAngle, '°');
@@ -798,15 +806,14 @@ function refreshPreLaunch() {
   // an arbitrary prediction horizon must never masquerade as a reached apex.
   updatePreLaunchReadouts(pre);
   const assisted = vals.guidanceMode === 'orbit_assist';
-  document.getElementById('guidance-summary')!.textContent = assisted
-    ? `Guidance · Orbit assist · ${formatNumber(vals.orbitAltitudeKm)} km` : 'Guidance · Try an orbit';
   const note = document.getElementById('orbit-plan-note')!;
   note.hidden = !assisted;
   const environment = resolveEnvironment(gravity);
   const speed = Math.sqrt(gravity * environment.radius ** 2 / (environment.radius + vals.orbitAltitudeKm * 1000));
   const world = environment.interpolated ? 'this world' : environment.name[0].toUpperCase() + environment.name.slice(1);
-  note.textContent = `Orbit assist starts upright: ${formatNumber(vals.orbitAltitudeKm)} km above ${world} needs about ${formatNumber(speed)} m/s sideways. Your engine and fuel still do the work.`;
-  document.getElementById('orbit-example-note')!.textContent = 'Replaces this rocket and selects Earth. A 200 km example to load, then Lift off.';
+  note.textContent = `${formatNumber(vals.orbitAltitudeKm)} km above ${world} needs about ${formatNumber(speed)} m/s sideways. Your engine and fuel still do the work. Air drag is not modelled.`;
+  document.getElementById('orbit-example-note')!.textContent = '1. Load this example. 2. Press Lift off. It selects Earth and a rocket ready for a 200 km orbit.';
+  document.getElementById('rocket-guidance-panel')!.classList.remove('orbit-example-loaded');
 }
 
 function updatePreLaunchReadouts(pre) {
@@ -1035,6 +1042,9 @@ function resetReadouts() {
 function setFlightActive(active) {
   if (isFlightActive === active) return;
   isFlightActive = active;
+  if (active && document.getElementById('rocket-guidance-panel')?.classList.contains('orbit-example-loaded')) {
+    document.getElementById('orbit-example-note')!.textContent = 'Earth orbit example loaded. Orbit assist steers the rocket and stops the engine when the orbit is reached.';
+  }
   // The :disabled pseudo-class carries the styling; no extra class is needed.
   btnFire.disabled = active;
   if (btnLaunch) btnLaunch.disabled = active;
