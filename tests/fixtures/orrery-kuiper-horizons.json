@@ -1,0 +1,117 @@
+{
+  "source": "https://ssd.jpl.nasa.gov/api/horizons.api",
+  "retrieved": "2026-10-14",
+  "parameters": {
+    "EPHEM_TYPE": "VECTORS",
+    "OUT_UNITS": "AU-D",
+    "REF_PLANE": "ECLIPTIC",
+    "REF_SYSTEM": "ICRF",
+    "VEC_CORR": "NONE",
+    "VEC_TABLE": "2",
+    "CSV_FORMAT": "YES",
+    "OBJ_DATA": "NO",
+    "CENTER": "500@10"
+  },
+  "note": "Independent heliocentric J2000 ecliptic geometric vectors at each SBDB solution epoch. These validate element conversion and phase origin, not long-term Kepler accuracy.",
+  "bodies": [
+    {
+      "id": "kuiper-136108",
+      "command": "136108;",
+      "epochJD": 2461200.5,
+      "position": [
+        -36.80199788326568,
+        -23.88585937196099,
+        23.52819476267178
+      ],
+      "maxErrorAU": 1e-7
+    },
+    {
+      "id": "kuiper-136472",
+      "command": "136472;",
+      "epochJD": 2461200.5,
+      "position": [
+        -45.95410369733339,
+        -9.391063638587463,
+        24.0900875398142
+      ],
+      "maxErrorAU": 1e-7
+    },
+    {
+      "id": "kuiper-50000",
+      "command": "50000;",
+      "epochJD": 2461200.5,
+      "position": [
+        8.21124791103569,
+        -41.39287009997044,
+        5.919642492753188
+      ],
+      "maxErrorAU": 1e-7
+    },
+    {
+      "id": "kuiper-90482",
+      "command": "90482;",
+      "epochJD": 2461200.5,
+      "position": [
+        -43.9236723791492,
+        9.945486446816478,
+        -16.56945807137657
+      ],
+      "maxErrorAU": 1e-7
+    },
+    {
+      "id": "kuiper-20000",
+      "command": "20000;",
+      "epochJD": 2461200.5,
+      "position": [
+        -28.18340144997403,
+        33.32481254032613,
+        7.332363654789173
+      ],
+      "maxErrorAU": 1e-7
+    },
+    {
+      "id": "kuiper-120347",
+      "command": "120347;",
+      "epochJD": 2461200.5,
+      "position": [
+        40.5818375610551,
+        8.496077993527066,
+        18.38992175536207
+      ],
+      "maxErrorAU": 1e-7
+    },
+    {
+      "id": "kuiper-174567",
+      "command": "174567;",
+      "epochJD": 2461200.5,
+      "position": [
+        -0.3131724268550134,
+        -42.48721949650353,
+        16.69591995122166
+      ],
+      "maxErrorAU": 1e-7
+    },
+    {
+      "id": "kuiper-28978",
+      "command": "28978;",
+      "epochJD": 2461200.5,
+      "position": [
+        4.782955218531596,
+        -36.69882464704644,
+        -5.868370631302573
+      ],
+      "maxErrorAU": 1e-7
+    },
+    {
+      "id": "kuiper-486958",
+      "command": "486958;",
+      "epochJD": 2461200.5,
+      "position": [
+        18.68623595589548,
+        -38.77153055058138,
+        1.26339684790808
+      ],
+      "maxErrorAU": 1e-7
+    }
+  ]
+}

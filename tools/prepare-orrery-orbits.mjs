@@ -12,6 +12,19 @@ const moonNames = [
   'Charon','Styx','Nix','Kerberos','Hydra',
 ];
 const asteroidIds = [1,2,3,4,7,10,15,16,24,31,52,87,511,704,951,243];
+const kuiperIds = [136108,136472,50000,90482,20000,120347,174567,28978,486958];
+// SBDB often has no diameter for TNOs. Keep measured size supplements explicit,
+// with their primary sources; never infer a size from absolute magnitude alone.
+const kuiperSizes = {
+  136108:{diameter:1430,url:'https://ssd.jpl.nasa.gov/planets/phys_par.html',note:'Twice JPL mean radius (volume-equivalent sphere).'},
+  136472:{diameter:1428,url:'https://ssd.jpl.nasa.gov/planets/phys_par.html',note:'Twice JPL mean radius.'},
+  50000:{diameter:1070,url:'https://arxiv.org/abs/1305.0449',note:'Fornasier et al. 2013, primary diameter; satellite excluded.'},
+  90482:{diameter:917,url:'https://arxiv.org/abs/1305.0449',note:'Fornasier et al. 2013, primary diameter; satellite excluded.'},
+  120347:{diameter:854,url:'https://arxiv.org/abs/1305.0449',note:'Fornasier et al. 2013, primary diameter; satellite excluded.'},
+  174567:{diameter:740,url:'https://arxiv.org/abs/2008.04818',note:'Souami et al. 2020, area-equivalent diameter; spherical approximation.'},
+  28978:{diameter:696.78,url:'https://arxiv.org/abs/2601.09639',note:'Kilic et al. 2026, area-equivalent diameter; spherical approximation.'},
+  486958:{diameter:18,url:'https://www.sciencedirect.com/science/article/pii/S0019103520301147',note:'Hofgartner et al. 2021, volume-equivalent diameter; contact-binary shape not resolved.'},
+};
 const urls = {
   moons:'https://ssd.jpl.nasa.gov/sats/elem/',
   sizes:'https://ssd.jpl.nasa.gov/sats/phys_par/',
@@ -26,7 +39,27 @@ const get = async url => {
   return response.text();
 };
 let snapshot;
+async function smallBodies(ids){
+  const bodies=[];
+  for(const id of ids){
+    const url=`${urls.asteroids}?sstr=${id}&phys-par=1&full-prec=1`;
+    const raw=JSON.parse(await get(url));
+    if(raw.error||!raw.orbit||raw.orbit.equinox!=='J2000')throw new Error(`Invalid small body: ${id}`);
+    const values=Object.fromEntries(raw.orbit.elements.map(e=>[e.name,Number(e.value)]));
+    const physical=Object.fromEntries((raw.phys_par??[]).map(e=>[e.name,Number(e.value)]));
+    bodies.push({id,name:raw.object.shortname.replace(/^\d+\s+/,''),epochJD:Number(raw.orbit.epoch),
+      orbitId:raw.orbit.orbit_id,values,physical,url});
+  }
+  return bodies;
+}
 if(process.argv.includes('--cached')) snapshot=JSON.parse(await fs.readFile(snapshotPath,'utf8'));
+else if(process.argv.includes('--extend-kuiper')){
+  snapshot=JSON.parse(await fs.readFile(snapshotPath,'utf8'));
+  snapshot.kuiper=await smallBodies(kuiperIds);
+  snapshot.kuiperRetrieved=new Date().toISOString().slice(0,10);
+  snapshot.kuiperSizes=kuiperSizes;
+  await fs.writeFile(snapshotPath,JSON.stringify(snapshot,null,2)+'\n');
+}
 else {
   const elements=rows(await get(urls.moons));
   const sizes=rows(await get(urls.sizes));
@@ -35,17 +68,9 @@ else {
     if(!row||!size)throw new Error(`Missing satellite: ${name}`);
     return {name,row,diameterKm:parseFloat(size[4])*2};
   });
-  const asteroids=[];
-  for(const id of asteroidIds){
-    const url=`${urls.asteroids}?sstr=${id}&phys-par=1&full-prec=1`;
-    const raw=JSON.parse(await get(url));
-    if(raw.error||!raw.orbit||raw.orbit.equinox!=='J2000')throw new Error(`Invalid asteroid: ${id}`);
-    const values=Object.fromEntries(raw.orbit.elements.map(e=>[e.name,Number(e.value)]));
-    const physical=Object.fromEntries(raw.phys_par.map(e=>[e.name,Number(e.value)]));
-    asteroids.push({id,name:raw.object.shortname.replace(/^\d+\s+/,''),epochJD:Number(raw.orbit.epoch),
-      orbitId:raw.orbit.orbit_id,values,physical,url});
-  }
-  snapshot={retrieved:new Date().toISOString().slice(0,10),urls,moons,asteroids};
+  const asteroids=await smallBodies(asteroidIds),kuiper=await smallBodies(kuiperIds);
+  const retrieved=new Date().toISOString().slice(0,10);
+  snapshot={retrieved,urls,moons,asteroids,kuiper,kuiperRetrieved:retrieved,kuiperSizes};
   await fs.writeFile(snapshotPath,JSON.stringify(snapshot,null,2)+'\n');
 }
 // North poles of the equatorial reference planes, IAU/ICRF J2000.
@@ -66,19 +91,27 @@ const moons=snapshot.moons.map(({name,row:r,diameterKm})=>{
 const asteroids=snapshot.asteroids.map(({id,name,epochJD,values:v,physical:p})=>({
   id:`asteroid-${id}`,name:name==='Europa'?'52 Europa':name,colour:id===1?'#c8c2b2':id===4?'#c9ad91':'#b8aa98',
   diameterKm:p.diameter,displayDiameter:Number((.12+Math.sqrt(p.diameter/939.4)*.16).toFixed(3)),
-  tilt:0,spinHours:p.rot_per||24,kind:id===1?'dwarf-planet':'asteroid',
+  tilt:0,spinHours:p.rot_per||24,kind:id===1?'dwarf-planet':'asteroid',region:'asteroids',
   elements:[v.a,v.e,v.i,v.ma+v.w+v.om,v.w+v.om,v.om],
   kepler:{epochJD,meanMotion:v.n},
 }));
-for(const world of [...moons,...asteroids]){
+const kuiper=snapshot.kuiper.map(({id,name,epochJD,values:v,physical:p})=>{
+  const diameter=p.diameter??snapshot.kuiperSizes[id]?.diameter;
+  return {id:`kuiper-${id}`,name,colour:id===486958?'#cd8d72':id===136108?'#dae0e5':'#b8c2cf',
+    diameterKm:diameter,displayDiameter:Number((.18+Math.sqrt(diameter/1430)*.3).toFixed(3)),
+    tilt:0,spinHours:p.rot_per||24,...(!p.rot_per?{spinIllustrative:true}:{}),
+    kind:[136108,136472].includes(id)?'dwarf-planet':'kuiper-object',region:'kuiper',
+    elements:[v.a,v.e,v.i,v.ma+v.w+v.om,v.w+v.om,v.om],kepler:{epochJD,meanMotion:v.n}};
+});
+for(const world of [...moons,...asteroids,...kuiper]){
   if(!(world.diameterKm>0)||!(world.spinHours>0))throw new Error(`Missing physical data: ${world.name}`);
   if(world.satellite){
     const s=world.satellite;
     if(!(s.distanceKm>0)||!(s.periodDays>0)||!(s.eccentricity>=0&&s.eccentricity<1)||
       ![s.epochJD,s.meanAnomaly,s.argumentOfPeriapsis,s.inclination,s.ascendingNode,...s.poleRaDec??[]].every(Number.isFinite))throw new Error(`Invalid moon orbit: ${world.name}`);
-  }else if(!world.elements.every(Number.isFinite)||!(world.kepler.meanMotion>0)||!Number.isFinite(world.kepler.epochJD))throw new Error(`Invalid asteroid orbit: ${world.name}`);
+  }else if(!world.elements.every(Number.isFinite)||!(world.elements[0]>0)||!(world.elements[1]>=0&&world.elements[1]<1)||!(world.kepler.meanMotion>0)||!Number.isFinite(world.kepler.epochJD))throw new Error(`Invalid small-body orbit: ${world.name}`);
 }
 const asRows=items=>'[\n'+items.map(w=>'  '+JSON.stringify(w)+',').join('\n')+'\n]';
-const output=`// Generated by tools/prepare-orrery-orbits.mjs; sources and limits: docs/orrery-orbits.md.\nimport type { World } from './orrery-model.ts';\nexport const CATALOGUE_MOONS:World[] = ${asRows(moons)};\nexport const ASTEROIDS:World[] = ${asRows(asteroids)};\n`;
+const output=`// Generated by tools/prepare-orrery-orbits.mjs; sources and limits: docs/orrery-orbits.md.\nimport type { World } from './orrery-model.ts';\nexport const CATALOGUE_MOONS:World[] = ${asRows(moons)};\nexport const ASTEROIDS:World[] = ${asRows(asteroids)};\nexport const KUIPER_BODIES:World[] = ${asRows(kuiper)};\n`;
 await fs.writeFile(new URL('../src/orrery-catalogue.ts',import.meta.url),output);
-console.log(`Prepared ${moons.length} moons and ${asteroids.length} named belt bodies.`);
+console.log(`Prepared ${moons.length} moons, ${asteroids.length} asteroids and ${kuiper.length} Kuiper belt bodies.`);

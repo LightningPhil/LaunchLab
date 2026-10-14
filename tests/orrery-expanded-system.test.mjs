@@ -1,18 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ALL_MOONS, MOONS, ASTEROIDS, WORLDS, worldsFor, isExtraWorld, J2000, DAY_MS, AU_KM, MIN_DATE, MAX_DATE,
-  NORMAL_RADII, EXPANDED_RADII, NORMAL_GAP, MOON_GAP, ASTEROID_GAP, footprint, moonOrbitRadius,
+import { ALL_MOONS, MOONS, ASTEROIDS, KUIPER_BODIES, WORLDS, worldsFor, isExtraWorld, J2000, DAY_MS, AU_KM, MIN_DATE, MAX_DATE,
+  NORMAL_RADII, EXPANDED_RADII, NORMAL_GAP, MOON_GAP, ASTEROID_GAP, KUIPER_GAP, footprint, moonOrbitRadius,
   satellitePositionAt, satelliteOffset, positionAt, positionFromElements, elementsAt, displayPosition,
-  diameterAt, asteroidOrbitRadius, beltHalfWidth, eclipticPole, jdToMs } from '../src/orrery-model.ts';
+  diameterAt, smallBodyOrbitRadius, beltHalfWidth, outerRadius, eclipticPole, jdToMs } from '../src/orrery-model.ts';
 
 test('expanded catalogue has unique selectable identities, complete major moon families and named belt bodies',()=>{
   assert.equal(MOONS.length,3);
   assert.equal(ALL_MOONS.length,46);
   assert.equal(ASTEROIDS.length,16);
+  assert.equal(KUIPER_BODIES.length,9);
   const defaults=worldsFor(),expanded=worldsFor(true);
   assert.equal(new Set(expanded.map(w=>w.id)).size,expanded.length,'52 Europa must not share Jupiter’s Europa identity');
   assert.ok(defaults.every(w=>!isExtraWorld(w.id)));
+  assert.ok(KUIPER_BODIES.every(w=>isExtraWorld(w.id)&&w.region==='kuiper'&&!defaults.includes(w)));
+  for(const name of ['Haumea','Makemake','Quaoar','Orcus','Arrokoth'])assert.ok(KUIPER_BODIES.some(w=>w.name===name));
   for(const parent of ['earth','mars','jupiter','saturn','uranus','neptune','pluto']){
     assert.ok(ALL_MOONS.some(m=>m.satellite.parent===parent));
   }
@@ -43,20 +46,32 @@ test('every expanded planet system and belt reserves the same clear edge gap',()
   }
 });
 
-test('named asteroids have ordered, separate lanes wholly inside the expanded belt',()=>{
-  const sorted=[...ASTEROIDS].sort((a,b)=>a.elements[0]-b.elements[0]);
-  let edge=EXPANDED_RADII.asteroids-beltHalfWidth('asteroids',true);
+test('named asteroids and Kuiper objects have ordered, separate lanes inside their own widened belts',()=>{
+  for(const [region,bodies,gap] of [['asteroids',ASTEROIDS,ASTEROID_GAP],['kuiper',KUIPER_BODIES,KUIPER_GAP]]){
+  const sorted=[...bodies].sort((a,b)=>a.elements[0]-b.elements[0]);
+  let edge=EXPANDED_RADII[region]-beltHalfWidth(region,true);
   for(const [i,world] of sorted.entries()){
-    const radius=asteroidOrbitRadius(world.id),inner=radius-world.displayDiameter/2;
-    assert.ok(Math.abs(inner-edge-(i?ASTEROID_GAP:0))<1e-12);
+    const radius=smallBodyOrbitRadius(world.id),inner=radius-world.displayDiameter/2;
+    assert.ok(Math.abs(inner-edge-(i?gap:0))<1e-12);
     edge=radius+world.displayDiameter/2;
-    assert.ok(edge<=EXPANDED_RADII.asteroids+beltHalfWidth('asteroids',true)+1e-12);
+    assert.ok(edge<=EXPANDED_RADII[region]+beltHalfWidth(region,true)+1e-12);
     assert.ok(Math.abs(Math.hypot(...displayPosition(positionAt(world,J2000),world.id,1,true))-radius)<1e-10);
+  }
+  }
+});
+
+test('system fit contains all Kuiper orbit extrema across the scale slider',()=>{
+  for(const world of KUIPER_BODIES)for(const amount of [0,.25,.5,.75,1]){
+    for(const E of [0,Math.PI]){
+      const real=positionFromElements(world.elements,E);
+      const extent=Math.hypot(...displayPosition(real,world.id,amount,true))+diameterAt(world,amount)/2;
+      assert.ok(extent<=outerRadius(amount,true)+1e-12,`${world.name} at scale ${amount}`);
+    }
   }
 });
 
 test('the toggle leaves physical positions and sizes unchanged; intermediate scales preserve direction',()=>{
-  for(const world of WORLDS){
+  for(const world of [...WORLDS,...ASTEROIDS,...KUIPER_BODIES]){
     const real=positionAt(world,J2000);
     assert.deepEqual(displayPosition(real,world.id,0),displayPosition(real,world.id,0,true));
   }
@@ -102,7 +117,7 @@ test('independent Horizons vectors validate ecliptic, Laplace and equatorial ref
 });
 
 test('SBDB mean anomalies advance from their own JD epoch and keep the complete Kepler ellipse',()=>{
-  for(const world of ASTEROIDS){
+  for(const world of [...ASTEROIDS,...KUIPER_BODIES]){
     const epoch=jdToMs(world.kepler.epochJD),atEpoch=elementsAt(world,epoch);
     assert.deepEqual(atEpoch,world.elements);
     assert.deepEqual(positionAt(world,epoch),positionFromElements(world.elements));
@@ -111,5 +126,17 @@ test('SBDB mean anomalies advance from their own JD epoch and keep the complete 
     const [a,e]=world.elements;
     assert.ok(Math.abs(Math.hypot(...positionFromElements(atEpoch,0))-a*(1-e))<1e-12);
     assert.ok(Math.abs(Math.hypot(...positionFromElements(atEpoch,Math.PI))-a*(1+e))<1e-12);
+  }
+});
+
+test('all nine Kuiper element conversions agree with independent Horizons vectors at their source epochs',()=>{
+  const fixture=JSON.parse(fs.readFileSync(new URL('./fixtures/orrery-kuiper-horizons.json',import.meta.url),'utf8'));
+  assert.equal(fixture.bodies.length,KUIPER_BODIES.length);
+  for(const ref of fixture.bodies){
+    const world=KUIPER_BODIES.find(w=>w.id===ref.id);
+    assert.equal(world.kepler.epochJD,ref.epochJD);
+    const model=positionAt(world,jdToMs(ref.epochJD));
+    const error=Math.hypot(...model.map((v,i)=>v-ref.position[i]));
+    assert.ok(error<ref.maxErrorAU,`${world.name}: ${error} AU`);
   }
 });

@@ -1715,5 +1715,267 @@
       },
       "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=243&phys-par=1&full-prec=1"
     }
-  ]
+  ],
+  "kuiper": [
+    {
+      "id": 136108,
+      "name": "Haumea",
+      "epochJD": 2461200.5,
+      "orbitId": "132",
+      "values": {
+        "e": 0.1944430148898797,
+        "a": 43.06029023650952,
+        "q": 34.68751758088936,
+        "i": 28.20847393040364,
+        "om": 121.7860561329425,
+        "w": 240.6905472508661,
+        "ma": 223.2104118812299,
+        "tp": 2500416.599615283,
+        "per": 103208.1173403618,
+        "n": 0.003488097731816818,
+        "ad": 51.43306289212968
+      },
+      "physical": {
+        "H": 0.14,
+        "rot_per": 3.9154
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=136108&phys-par=1&full-prec=1"
+    },
+    {
+      "id": 136472,
+      "name": "Makemake",
+      "epochJD": 2461200.5,
+      "orbitId": "130",
+      "values": {
+        "e": 0.1588889953992523,
+        "a": 45.57093317300052,
+        "q": 38.33021338173601,
+        "i": 29.02785603743067,
+        "om": 79.2948338209406,
+        "w": 297.0922733397207,
+        "ma": 169.9379962048232,
+        "tp": 2408158.6940986165,
+        "per": 112364.8068762869,
+        "n": 0.003203850120050116,
+        "ad": 52.81165296426503
+      },
+      "physical": {
+        "H": -0.25,
+        "rot_per": 22.8266
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=136472&phys-par=1&full-prec=1"
+    },
+    {
+      "id": 50000,
+      "name": "Quaoar",
+      "epochJD": 2461200.5,
+      "orbitId": "52",
+      "values": {
+        "e": 0.03520019261837198,
+        "a": 43.15617622670811,
+        "q": 41.63707051085558,
+        "i": 7.991575800732639,
+        "om": 188.9191248092036,
+        "w": 163.209046106457,
+        "ma": 292.8487574842713,
+        "tp": 2480516.3763147406,
+        "per": 103553.0425468722,
+        "n": 0.003476479214379914,
+        "ad": 44.67528194256064
+      },
+      "physical": {
+        "H": 2.41,
+        "rot_per": 8.84
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=50000&phys-par=1&full-prec=1"
+    },
+    {
+      "id": 90482,
+      "name": "Orcus",
+      "epochJD": 2461200.5,
+      "orbitId": "61",
+      "values": {
+        "e": 0.2205240628250881,
+        "a": 39.37686537914865,
+        "q": 30.69331904442224,
+        "i": 20.55681019612,
+        "om": 268.4053519455824,
+        "w": 73.56848606705262,
+        "ma": 189.0972913554275,
+        "tp": 2504046.1349624335,
+        "per": 90252.68650688507,
+        "n": 0.003988800931399829,
+        "ad": 48.06041171387506
+      },
+      "physical": {
+        "H": 2.13,
+        "rot_per": 13.188
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=90482&phys-par=1&full-prec=1"
+    },
+    {
+      "id": 20000,
+      "name": "Varuna",
+      "epochJD": 2461200.5,
+      "orbitId": "65",
+      "values": {
+        "e": 0.05161543734827757,
+        "a": 43.2000227503935,
+        "q": 40.9702346826764,
+        "i": 17.14054429876356,
+        "om": 97.21583412147274,
+        "w": 273.3589746671601,
+        "ma": 115.6679071685554,
+        "tp": 2427878.215564044,
+        "per": 103710.8969168355,
+        "n": 0.00347118779898972,
+        "ad": 45.4298108181106
+      },
+      "physical": {
+        "H": 3.79,
+        "diameter": 900,
+        "rot_per": 6.3436,
+        "albedo": 0.07
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=20000&phys-par=1&full-prec=1"
+    },
+    {
+      "id": 120347,
+      "name": "Salacia",
+      "epochJD": 2461200.5,
+      "orbitId": "42",
+      "values": {
+        "e": 0.1046039838127425,
+        "a": 42.05521225409177,
+        "q": 37.6560695122233,
+        "i": 23.92719899399624,
+        "om": 280.254342318715,
+        "w": 308.9773054038262,
+        "ma": 134.6779349662037,
+        "tp": 2423933.6986314603,
+        "per": 99615.78707039855,
+        "n": 0.00361388501348273,
+        "ad": 46.45435499596024
+      },
+      "physical": {
+        "H": 4.12,
+        "rot_per": 6.09
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=120347&phys-par=1&full-prec=1"
+    },
+    {
+      "id": 174567,
+      "name": "Varda",
+      "epochJD": 2461200.5,
+      "orbitId": "17",
+      "values": {
+        "e": 0.1422792008234468,
+        "a": 45.553792965197,
+        "q": 39.07243570763202,
+        "i": 21.51272002644964,
+        "om": 184.0761905128264,
+        "w": 184.8433524049403,
+        "ma": 277.2915511778176,
+        "tp": 2487001.2670377386,
+        "per": 112301.41860785,
+        "n": 0.003205658525624677,
+        "ad": 52.03515022276198
+      },
+      "physical": {
+        "H": 3.46,
+        "rot_per": 5.91
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=174567&phys-par=1&full-prec=1"
+    },
+    {
+      "id": 28978,
+      "name": "Ixion",
+      "epochJD": 2461200.5,
+      "orbitId": "22",
+      "values": {
+        "e": 0.2435609285514542,
+        "a": 39.34646480522989,
+        "q": 29.76320330205099,
+        "i": 19.66251532313573,
+        "om": 71.0808264000478,
+        "w": 300.6223377684572,
+        "ma": 294.9676352498359,
+        "tp": 2477485.360758701,
+        "per": 90148.1884543894,
+        "n": 0.003993424672999863,
+        "ad": 48.9297263084088
+      },
+      "physical": {
+        "H": 3.47
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=28978&phys-par=1&full-prec=1"
+    },
+    {
+      "id": 486958,
+      "name": "Arrokoth",
+      "epochJD": 2461200.5,
+      "orbitId": "3",
+      "values": {
+        "e": 0.03555717645015258,
+        "a": 44.05257835991367,
+        "q": 42.48619305808604,
+        "i": 2.450613924655929,
+        "om": 159.0377267890618,
+        "w": 188.8507463365642,
+        "ma": 310.9839309924138,
+        "tp": 2475741.4038730534,
+        "per": 106796.1078945169,
+        "n": 0.003370909362685521,
+        "ad": 45.61896366174129
+      },
+      "physical": {
+        "H": 11.06,
+        "rot_per": 15.918
+      },
+      "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=486958&phys-par=1&full-prec=1"
+    }
+  ],
+  "kuiperRetrieved": "2026-10-14",
+  "kuiperSizes": {
+    "28978": {
+      "diameter": 696.78,
+      "url": "https://arxiv.org/abs/2601.09639",
+      "note": "Kilic et al. 2026, area-equivalent diameter; spherical approximation."
+    },
+    "50000": {
+      "diameter": 1070,
+      "url": "https://arxiv.org/abs/1305.0449",
+      "note": "Fornasier et al. 2013, primary diameter; satellite excluded."
+    },
+    "90482": {
+      "diameter": 917,
+      "url": "https://arxiv.org/abs/1305.0449",
+      "note": "Fornasier et al. 2013, primary diameter; satellite excluded."
+    },
+    "120347": {
+      "diameter": 854,
+      "url": "https://arxiv.org/abs/1305.0449",
+      "note": "Fornasier et al. 2013, primary diameter; satellite excluded."
+    },
+    "136108": {
+      "diameter": 1430,
+      "url": "https://ssd.jpl.nasa.gov/planets/phys_par.html",
+      "note": "Twice JPL mean radius (volume-equivalent sphere)."
+    },
+    "136472": {
+      "diameter": 1428,
+      "url": "https://ssd.jpl.nasa.gov/planets/phys_par.html",
+      "note": "Twice JPL mean radius."
+    },
+    "174567": {
+      "diameter": 740,
+      "url": "https://arxiv.org/abs/2008.04818",
+      "note": "Souami et al. 2020, area-equivalent diameter; spherical approximation."
+    },
+    "486958": {
+      "diameter": 18,
+      "url": "https://www.sciencedirect.com/science/article/pii/S0019103520301147",
+      "note": "Hofgartner et al. 2021, volume-equivalent diameter; contact-binary shape not resolved."
+    }
+  }
 }
