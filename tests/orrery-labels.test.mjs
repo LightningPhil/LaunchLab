@@ -42,7 +42,8 @@ test('Ganymede follows a continuous closed orbit through phase wraps in either d
     for(const epoch of [J2000,J2000+ganymede.satellite.periodDays*DAY_MS]){
       const before=satelliteOffset(ganymede,epoch-1,amount),after=satelliteOffset(ganymede,epoch+1,amount);
       assert.ok(Math.hypot(...after.map((v,i)=>v-before[i]))<radius*1e-6);
-      assert.ok(Math.abs(Math.hypot(...after)-radius)<1e-10);
+      const radialVariation=ganymede.satellite.distanceKm/149597870.7*ganymede.satellite.eccentricity*(1-amount);
+      assert.ok(Math.abs(Math.hypot(...after)-radius)<=radialVariation+1e-10,'physical eccentricity fades smoothly into the circular display lane');
     }
     assert.deepEqual(satelliteOffset({...ganymede,spinHours:1},J2000+DAY_MS,amount),satelliteOffset(ganymede,J2000+DAY_MS,amount),'surface spin cannot move a moon around Jupiter');
   }

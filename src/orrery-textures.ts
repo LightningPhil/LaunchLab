@@ -13,7 +13,7 @@ export class PlanetSurface {
     this.material=world.id==='sun'
       ?new THREE.MeshBasicMaterial({color:world.colour})
       :new THREE.MeshStandardMaterial({color:world.colour,roughness:world.id==='earth'?.68:.95,metalness:0});
-    const maps=MAPS[world.id].filter(map=>map.width<=maxTextureSize);
+    const maps=(MAPS[world.id]??[]).filter(map=>map.width<=maxTextureSize);
     this.surface=new SurfaceLod(maps.length,(level)=>new Promise((resolve,reject)=>{
       loader.load(maps[level].url,texture=>{
         this.configure(texture);resolve(texture);
@@ -38,6 +38,7 @@ export class PlanetSurface {
   }
   /** Projected physical pixel diameter; off-screen objects use zero. */
   update(pixels:number,now:number){
+    if(!MAPS[this.world.id])return;
     const texture=this.surface.update(pixels,now);
     if(texture&&this.material.map!==texture)this.use(texture);
   }

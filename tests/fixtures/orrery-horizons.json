@@ -1,0 +1,13 @@
+{
+  "source": "https://ssd.jpl.nasa.gov/api/horizons.api",
+  "retrieved": "2026-10-13",
+  "parameters": {"EPHEM_TYPE":"VECTORS","TLIST":"2451545.0","OUT_UNITS":"AU-D","REF_PLANE":"ECLIPTIC","REF_SYSTEM":"ICRF","VEC_CORR":"NONE","VEC_TABLE":"2"},
+  "note": "Planet-centred geometric vectors at J2000. Tolerances cover rounded mean elements, not a precision ephemeris. Triton's published mean elements differ from Horizons by approximately four degrees at this epoch.",
+  "moons": [
+    {"id":"moon","command":301,"center":"500@399","position":[-0.001949281649686695,-0.001838126040073046,0.0002424579738820632],"maxRelativeError":0.015},
+    {"id":"ganymede","command":503,"center":"500@599","position":[-0.005490352844041520,-0.004581541308862496,-0.0002310042060535515],"maxRelativeError":0.003},
+    {"id":"titania","command":703,"center":"500@799","position":[-0.0004218442512724889,-0.0003104395417042669,-0.002867062631890276],"maxRelativeError":0.002},
+    {"id":"triton","command":801,"center":"500@899","position":[-0.001374996004324391,0.0008293000645146109,0.001744682412714287],"maxRelativeError":0.08},
+    {"id":"charon","command":901,"center":"500@999","position":[-0.00004570734209108648,-0.00009679682912675999,-0.00007552618150656710],"maxRelativeError":0.003}
+  ]
+}

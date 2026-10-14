@@ -1,15 +1,18 @@
 import './orrery.css';
 import * as THREE from 'three';
 import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
-import { WORLDS, MOONS, moonOrbitRadius, satelliteOffset, BELTS, NORMAL_RADII, DAY_MS, YEAR_DAYS, MIN_DATE, MAX_DATE, TAU, mix, seeded,
-  elementsAt, positionFromElements, positionAt, displayPosition, diameterAt, spinAt, outerRadius,
+import { WORLDS, ALL_MOONS, ASTEROIDS, moonsFor, worldsFor, isExtraWorld, normalRadii, beltHalfWidth, moonOrbitRadius, satelliteOffset, BELTS, AU_KM, DAY_MS, YEAR_DAYS, MIN_DATE, MAX_DATE, TAU, mix, seeded,
+  elementsAt, positionFromElements, positionAt, displayPosition, diameterAt, spinAt, outerRadius, eclipticPole,
   daysSinceJ2000, advanceTime, type World } from './orrery-model.ts';
 import { PlanetSurface, haloTexture, ringTexture } from './orrery-textures.ts';
 import { TouchPan, panOrthographic } from './orrery-navigation.ts';
 import { placeLabel, easeLabel, type LabelRect, type LabelPlacement } from './orrery-labels.ts';
 import { COMPACT_LAYOUT_QUERY } from './display-layout.ts';
 
-const ALL_WORLDS=WORLDS.flatMap(world=>[world,...MOONS.filter(moon=>moon.satellite!.parent===world.id)]);
+const ALL_WORLDS=worldsFor(true);
+const inspectOptions=(expanded:boolean)=>`<option value="">Choose a world…</option>${WORLDS.map(w=>
+  `<optgroup label="${w.name}${moonsFor(expanded).some(m=>m.satellite!.parent===w.id)?' & moons':''}"><option value="${w.id}">${w.name}</option>${moonsFor(expanded).filter(m=>m.satellite!.parent===w.id).map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</optgroup>`).join('')}
+  ${expanded?`<optgroup label="Named belt bodies">${ASTEROIDS.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</optgroup>`:''}<optgroup label="Belts">${BELTS.map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</optgroup>`;
 
 let activeDialog:HTMLDialogElement|undefined;
 export const isOrreryOpen=()=>!!activeDialog?.open;
@@ -25,7 +28,7 @@ export function installOrrery(onOpen:()=>void) {
   dialog.innerHTML=`<header class="orrery-header"><div class="orrery-brand"><span class="orrery-emblem" aria-hidden="true">◎</span><div><p class="orrery-kicker">LAUNCH LAB / CELESTIAL MECHANICS</p><h1 id="orrery-title">The Orrery<span>A moving solar system.</span></h1></div></div><button type="button" class="orrery-close">↙ Back to the lab</button></header>
     <section class="orrery-stage" aria-label="Interactive three dimensional solar system">
       <div class="orrery-render"></div><canvas class="orrery-leaders" aria-hidden="true"></canvas><div class="orrery-labels"></div>
-      <div class="orrery-view-tools" role="group" aria-label="View controls"><button type="button" class="orrery-home" data-view="home" title="Restore the original view" aria-label="Restore the original view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9"/></svg></button><button type="button" data-view="fit" title="Re-centre and fit the complete solar system at the current angle">Fit system</button><button type="button" data-view="top">Top</button><button type="button" data-view="edge">Edge</button><span class="orrery-tool-divider"></span><label><input id="orrery-label-toggle" type="checkbox" checked> Labels</label><label><input id="orrery-orbit-toggle" type="checkbox" checked> Orbits</label></div>
+      <div class="orrery-view-tools" role="group" aria-label="View controls"><button type="button" class="orrery-home" data-view="home" title="Restore the original view" aria-label="Restore the original view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9"/></svg></button><button type="button" data-view="fit" title="Re-centre and fit the complete solar system at the current angle">Fit system</button><button type="button" data-view="top">Top</button><button type="button" data-view="edge">Edge</button><span class="orrery-tool-divider"></span><label><input id="orrery-label-toggle" type="checkbox" checked> Labels</label><label><input id="orrery-orbit-toggle" type="checkbox" checked> Orbits</label><label title="Show ${ALL_MOONS.length} moons and ${ASTEROIDS.length} named belt bodies. Even spacing makes room for their orbits."><input id="orrery-catalogue-toggle" type="checkbox" aria-describedby="orrery-catalogue-note"> More moons & asteroids</label></div>
       <aside class="orrery-info" hidden aria-label="Selected world"><button class="orrery-info-close" type="button" aria-label="Close world details">×</button><p class="orrery-kicker" id="orrery-kind"></p><h2></h2><dl></dl><p class="orrery-info-note"></p><button type="button" class="orrery-focus">View close-up</button></aside>
       <div class="orrery-stage-foot"><span class="orrery-mouse-hint">Drag to turn freely <b>·</b> Scroll to zoom <b>·</b> Right-drag to pan</span><span class="orrery-touch-hint">Drag to turn <b>·</b> Pinch to zoom <b>·</b> Two-finger drag to pan</span><span id="orrery-mode-note">Evenly spaced display</span></div>
       <p class="orrery-error" role="alert" hidden></p>
@@ -33,10 +36,10 @@ export function installOrrery(onOpen:()=>void) {
     <footer class="orrery-controls">
       <div class="orrery-transport"><div class="orrery-time"><p class="orrery-kicker">SIMULATION TIME <span id="orrery-zone"></span></p><div><output id="orrery-live-date"></output><output id="orrery-live-time"></output></div></div>
       <div class="orrery-playback"><button type="button" id="orrery-play" class="orrery-primary">Ⅱ Pause</button><button type="button" id="orrery-direction" title="Reverse time" aria-pressed="false">Forward →</button><label class="orrery-speed-label">Speed<select id="orrery-speed" aria-label="Simulation speed"><option value="real">Real time</option><option value="0.002737850787">1 day / minute</option><option value="week" selected>1 week / minute</option><option value="0.083333333333">1 month / minute</option><option value="1">1 year / minute</option><option value="10">10 years / minute</option><option value="100">100 years / minute</option></select></label></div>
-      <label class="orrery-inspect-label">Explore<select id="orrery-inspect" aria-label="Inspect a world"><option value="">Choose a world…</option>${ALL_WORLDS.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}${BELTS.map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</select></label></div>
+      <label class="orrery-inspect-label">Explore<select id="orrery-inspect" aria-label="Inspect a world">${inspectOptions(false)}</select></label></div>
       <details class="orrery-adjustment-panel" open><summary>Date & display scale <span aria-hidden="true">⌄</span></summary><div class="orrery-adjustments"><form class="orrery-date-form"><label for="orrery-date">Go to date & time <small>(local)</small></label><div><input type="datetime-local" step="1" id="orrery-date" required aria-describedby="orrery-date-note"><button type="submit" title="Jump to the selected date and pause">Set date</button><button type="button" id="orrery-now">Now</button></div><span id="orrery-date-note">Supported dates: 1000–3000</span></form>
-      <div class="orrery-scale-control"><div><label for="orrery-scale">Distance & size</label><output for="orrery-scale" id="orrery-scale-value">Even spacing</output></div><input id="orrery-scale" type="range" min="0" max="100" value="100" step="1" aria-label="Solar system distance and planet size scale"><div class="orrery-scale-ends"><button type="button" data-scale="0">True scale</button><span>Same orbital clock. A different perspective.</span><button type="button" data-scale="100">Even spacing</button></div></div></div></details>
-      <div class="orrery-bottom"><p id="orrery-status" role="status">Running · 1 week / minute</p><details class="orrery-model-note"><summary>About the model</summary><div><strong>A date-driven Keplerian orrery</strong><p>Elliptical, inclined orbits use <a href="https://ssd.jpl.nasa.gov/planets/approx_pos.html" target="_blank" rel="noreferrer">JPL approximate orbital elements</a> for 1000–3000. Earth represents the Earth–Moon barycentre; Pluto uses the original JPL elements. UTC approximates dynamical time.</p><p>Even spacing preserves orbital angles and timing, while circularising distances into separated lanes. Sizes are enlarged: Sun 3× Earth; Jupiter 2×. Saturn’s rings and moon systems count towards the clear gaps.</p><p>Surface spins use <a href="https://nssdc.gsfc.nasa.gov/planetary/factsheet/" target="_blank" rel="noreferrer">NASA rotation periods</a> and axial tilts; texture meridians and axial longitudes are illustrative. Belt particles are representative circular Kepler orbits, not individual tracked asteroids. The Moon, Ganymede and Charon use representative circular orbits with measured mean distances and periods; their phases and planes are illustrative. Surface maps by <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noreferrer">Solar System Scope / INOVE</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>) and <a href="https://science.nasa.gov/3d-resources/" target="_blank" rel="noreferrer">NASA VTAD</a> are packaged at up to three resolutions. Some poorly mapped regions are filled or less detailed; colours and lighting are illustrative. Ambient studio lighting keeps every world visible.</p></div></details></div>
+      <div class="orrery-scale-control"><div><label for="orrery-scale">Distance & size</label><output for="orrery-scale" id="orrery-scale-value">Even spacing</output></div><input id="orrery-scale" type="range" min="0" max="100" value="100" step="1" aria-label="Solar system distance and planet size scale"><div class="orrery-scale-ends"><button type="button" data-scale="0">True scale</button><span>Same orbital clock. A different perspective.</span><button type="button" data-scale="100">Even spacing</button></div><p id="orrery-catalogue-note">More moons & asteroids widens the lanes at Even spacing. Zoom in or Explore a planet to see its moons.</p></div></div></details>
+      <div class="orrery-bottom"><p id="orrery-status" role="status">Running · 1 week / minute</p><details class="orrery-model-note"><summary>About the model</summary><div><strong>A date-driven Keplerian orrery</strong><p>Elliptical, inclined planetary orbits use <a href="https://ssd.jpl.nasa.gov/planets/approx_pos.html" target="_blank" rel="noreferrer">JPL approximate elements</a> for 1000–3000. Earth represents the Earth–Moon barycentre; Pluto uses the original JPL elements. UTC approximates dynamical time.</p><p>Even spacing preserves orbital angles and timing, while circularising distances into separated lanes. Sizes are enlarged: Sun 3× Earth; Jupiter 2×. More moons & asteroids reserves a separate lane for every visible moon and named belt body, including room around Saturn’s rings.</p><p>The ${ALL_MOONS.length} moons use <a href="https://ssd.jpl.nasa.gov/sats/elem/" target="_blank" rel="noreferrer">JPL mean elements</a>, with elliptical shapes, epochs and reference planes converted to the J2000 ecliptic. The ${ASTEROIDS.length} named belt bodies use <a href="https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html" target="_blank" rel="noreferrer">JPL Small-Body Database</a> elements retrieved 13 October 2026. These fixed Kepler ellipses omit precession, resonances and perturbations: phases drift away from each source epoch, especially over centuries. The planet model’s 1000–3000 accuracy interval does not apply to moons or asteroids. Use <a href="https://ssd.jpl.nasa.gov/horizons/" target="_blank" rel="noreferrer">Horizons</a> for precise positions. Background belt particles remain representative.</p><p>Planet spins use <a href="https://nssdc.gsfc.nasa.gov/planetary/factsheet/" target="_blank" rel="noreferrer">NASA rotation data</a>; added moon spins, untextured surfaces, colours and lighting are illustrative. Surface maps by <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noreferrer">Solar System Scope / INOVE</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>) and <a href="https://science.nasa.gov/3d-resources/" target="_blank" rel="noreferrer">NASA VTAD</a> are packaged at up to three resolutions. Some poorly mapped regions are filled or less detailed.</p></div></details></div>
     </footer>`;
   document.body.append(dialog);
   const $=<T extends HTMLElement>(selector:string)=>dialog.querySelector<T>(selector)!;
@@ -111,6 +114,7 @@ export function installOrrery(onOpen:()=>void) {
   },{passive:false,capture:true});
   const labelCanvas=$<HTMLCanvasElement>('.orrery-leaders'), ink=labelCanvas.getContext('2d')!;
   const slider=$<HTMLInputElement>('#orrery-scale'),labelToggle=$<HTMLInputElement>('#orrery-label-toggle'),orbitToggle=$<HTMLInputElement>('#orrery-orbit-toggle');
+  const catalogueToggle=$<HTMLInputElement>('#orrery-catalogue-toggle');
   const dateInput=$<HTMLInputElement>('#orrery-date'),play=$<HTMLButtonElement>('#orrery-play'),status=$<HTMLElement>('#orrery-status');
   const compactLayout=matchMedia(COMPACT_LAYOUT_QUERY),adjustments=$<HTMLDetailsElement>('.orrery-adjustment-panel');
   const syncAdjustments=()=>{adjustments.open=!compactLayout.matches;};
@@ -121,21 +125,29 @@ export function installOrrery(onOpen:()=>void) {
   let amount=1,simulation=Date.now(),running=true,rate=7/YEAR_DAYS,direction=1,dateDirty=false,selected='';
   let width=1,height=1,frame=0,last:number|undefined,lastUI=0,orbitEpoch=NaN,orbitScale=NaN;
   let renderedDate=NaN,renderedAmount=NaN;
-  let labelsVisible=true,orbitsVisible=true,firstOpen=true;
+  let labelsVisible=true,orbitsVisible=true,firstOpen=true,expanded=false;
   const pointsPerOrbit=256;
   const orbitAngles=circlePoints(pointsPerOrbit);
   const sphereGeometry=new THREE.SphereGeometry(.5,96,64);
-  type Target={id:string;name:string;colour:string;position:THREE.Vector3;radius:number;label:HTMLButtonElement};
+  const smallGeometry=new THREE.SphereGeometry(.5,24,16);
+  type Target={id:string;name:string;colour:string;position:THREE.Vector3;radius:number;label:HTMLButtonElement;enabled:boolean};
   type Planet={world:World;root:THREE.Group;tilt:THREE.Group;mesh:THREE.Mesh;surface:PlanetSurface;orbit?:THREE.LineLoop;target:Target;real:[number,number,number];halo?:THREE.Sprite};
   const targets:Target[]=[],planets:Planet[]=[];
   function makeTarget(id:string,name:string,colour:string):Target {
     const label=document.createElement('button');label.type='button';label.className='orrery-world-label';label.textContent=name;label.style.setProperty('--world-colour',colour);label.setAttribute('aria-label',`Explore ${name}`);label.onclick=()=>inspect(id);$('.orrery-labels').append(label);
-    const target={id,name,colour,position:new THREE.Vector3(),radius:0,label};targets.push(target);return target;
+    const target={id,name,colour,position:new THREE.Vector3(),radius:0,label,enabled:!isExtraWorld(id)};label.hidden=!target.enabled;targets.push(target);return target;
   }
   for(const world of ALL_WORLDS){
     const root=new THREE.Group(),tilt=new THREE.Group();root.add(tilt);scene.add(root);tilt.rotation.z=world.tilt*Math.PI/180;
+    // Orient the giant planets and their rings in the same measured plane as
+    // their inner moons. A scalar obliquity alone leaves the node arbitrary.
+    const reference=world.satellite??ALL_MOONS.find(m=>m.satellite!.parent===world.id&&m.satellite!.poleRaDec)?.satellite;
+    if(reference?.poleRaDec){
+      const [x,y,z]=eclipticPole(reference.poleRaDec);
+      tilt.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(x,z,-y));
+    }
     const surface=new PlanetSurface(world,Math.min(8,renderer.capabilities.getMaxAnisotropy()),renderer.capabilities.maxTextureSize);
-    const mesh=new THREE.Mesh(sphereGeometry,surface.material);tilt.add(mesh);
+    const mesh=new THREE.Mesh(isExtraWorld(world.id)?smallGeometry:sphereGeometry,surface.material);tilt.add(mesh);
     const target=makeTarget(world.id,world.name,world.colour),planet:Planet={world,root,tilt,mesh,surface,target,real:[0,0,0]};
     if(world.id==='saturn'){
       const geometry=new THREE.RingGeometry(.63,1.15,128),uv=geometry.getAttribute('uv'),pos=geometry.getAttribute('position');
@@ -147,11 +159,6 @@ export function installOrrery(onOpen:()=>void) {
     }else{
       const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(pointsPerOrbit*3),3));
       planet.orbit=new THREE.LineLoop(geo,new THREE.LineBasicMaterial({color:world.colour,transparent:true,opacity:.23,depthWrite:false}));planet.orbit.frustumCulled=false;scene.add(planet.orbit);
-      if(world.satellite){
-        const attribute=geo.getAttribute('position');
-        orbitAngles.forEach((angle,i)=>attribute.setXYZ(i,Math.cos(angle),0,-Math.sin(angle)));
-        planet.orbit.rotation.z=world.satellite.inclination*Math.PI/180;
-      }
     }
     planets.push(planet);
   }
@@ -178,15 +185,20 @@ export function installOrrery(onOpen:()=>void) {
     planets.forEach(p=>{if(p.orbit)(p.orbit.material as THREE.LineBasicMaterial).opacity=id===p.world.id?.65:.23;});
     if(!id)return;
     const world=ALL_WORLDS.find(w=>w.id===id),belt=BELTS.find(b=>b.id===id);
-    $('.orrery-focus').hidden=!world;
+    const focusButton=$<HTMLButtonElement>('.orrery-focus');focusButton.hidden=!world;
+    focusButton.textContent=world&&!world.satellite&&moonsFor(expanded).some(m=>m.satellite!.parent===id)?'View moon system':'View close-up';
     $('.orrery-info h2').textContent=world?.name??belt!.name;
-    $('#orrery-kind').textContent=belt?'SMALL-BODY REGION':world?.satellite?`MOON OF ${WORLDS.find(w=>w.id===world.satellite!.parent)!.name.toUpperCase()}`:id==='sun'?'OUR STAR':id==='pluto'?'DWARF PLANET':'PLANET';
-    const year=world?.satellite?world.satellite.periodDays/YEAR_DAYS:world?.elements?360/world.rates![3]*36525/YEAR_DAYS:0;
+    $('#orrery-kind').textContent=belt?'SMALL-BODY REGION':world?.satellite?`MOON OF ${WORLDS.find(w=>w.id===world.satellite!.parent)!.name.toUpperCase()}`:id==='sun'?'OUR STAR':id==='pluto'||world?.kind==='dwarf-planet'?'DWARF PLANET':world?.kind==='asteroid'?'MAIN-BELT ASTEROID':'PLANET';
+    const year=world?.satellite?world.satellite.periodDays/YEAR_DAYS:world?.kepler?360/world.kepler.meanMotion/YEAR_DAYS:world?.elements?360/world.rates![3]*36525/YEAR_DAYS:0;
     $('.orrery-info dl').innerHTML=belt?`<div><dt>Solar distance</dt><dd>${belt.inner}–${belt.outer} AU</dd></div><div><dt>Model particles</dt><dd>${belt.count.toLocaleString()}</dd></div>`:`<div><dt>Solar distance</dt><dd id="orrery-distance"></dd></div>${year?`<div><dt>Orbit</dt><dd>${year<2?(year*YEAR_DAYS).toFixed(1)+' days':year.toFixed(1)+' years'}</dd></div>`:''}<div><dt>Axial rotation</dt><dd>${world!.spinHours>48?(world!.spinHours/24).toFixed(2)+' days':world!.spinHours.toFixed(2)+' hours'}</dd></div>`;
     $('.orrery-info-note').textContent=belt?'Representative particles orbit the Sun at speeds set by their distance.':world!.tilt>90?'A retrograde spinner: its rotation axis leans beyond 90°.':id==='earth'?'Our home, with an axis tilted by 23.4°.':id==='sun'?'A rotating star. All worlds share steady ambient lighting.':`Axial tilt ${world!.tilt}°. Select another world to compare.`;
     if(world?.satellite){
-      $('.orrery-info dl').innerHTML=`<div><dt>Parent distance</dt><dd>${world.satellite.distanceKm.toLocaleString()} km</dd></div><div><dt>Orbit / rotation</dt><dd>${world.satellite.periodDays.toFixed(3)} days</dd></div>`;
-      $('.orrery-info-note').textContent='A synchronously rotating moon. This representative circular orbit uses its measured mean period; its phase and plane are illustrative.';
+      const s=world.satellite!;
+      $('.orrery-info dl').innerHTML=`<div><dt>Mean orbit radius</dt><dd>${s.distanceKm.toLocaleString()} km</dd></div><div><dt>Orbital period</dt><dd>${s.periodDays.toFixed(3)} days</dd></div><div><dt>Eccentricity</dt><dd>${s.eccentricity.toFixed(3)}</dd></div><div><dt>Inclination</dt><dd>${s.inclination.toFixed(1)}° (${s.frame})</dd></div>`;
+      $('.orrery-info-note').textContent=`${s.inclination>90?'Retrograde orbit. ':''}JPL mean orbital shape and reference plane; phase is approximate away from the source epoch. Surface rotation is illustrative.`;
+    }else if(world?.kepler){
+      $('.orrery-info dl').innerHTML+=`<div><dt>Diameter</dt><dd>${world.diameterKm.toFixed(1)} km</dd></div><div><dt>Eccentricity</dt><dd>${world.elements![1].toFixed(3)}</dd></div>`;
+      $('.orrery-info-note').textContent='An individual JPL orbit with its own ellipse, inclination and date-driven phase. Kepler propagation omits planetary perturbations.';
     }
     updateUI();
   }
@@ -200,36 +212,38 @@ export function installOrrery(onOpen:()=>void) {
   function updateOrbits(){
     if(Math.abs(simulation-orbitEpoch)<30*DAY_MS&&orbitScale===amount)return;
     orbitEpoch=simulation;orbitScale=amount;
-    for(const p of planets){if(!p.orbit||p.world.satellite)continue;const e=elementsAt(p.world,simulation),attribute=p.orbit.geometry.getAttribute('position');
-      orbitAngles.forEach((angle,i)=>{const v=displayPosition(positionFromElements(e,angle),p.world.id,amount);attribute.setXYZ(i,...v);});attribute.needsUpdate=true;
+    for(const p of planets){if(!p.orbit||!p.target.enabled)continue;
+      const e=p.world.satellite?undefined:elementsAt(p.world,simulation),attribute=p.orbit.geometry.getAttribute('position');
+      orbitAngles.forEach((angle,i)=>{const v=p.world.satellite?satelliteOffset(p.world,simulation,amount,expanded,angle):displayPosition(positionFromElements(e!,angle),p.world.id,amount,expanded);attribute.setXYZ(i,...v);});attribute.needsUpdate=true;
     }
   }
   function updateScene(){
     if(renderedDate===simulation&&renderedAmount===amount)return;
     renderedDate=simulation;renderedAmount=amount;
     for(const p of planets){
+      p.root.visible=p.target.enabled;if(p.orbit)p.orbit.visible=p.target.enabled&&orbitsVisible;
+      if(!p.target.enabled)continue;
       const satellite=p.world.satellite;
       if(satellite){
         const parent=planets.find(parent=>parent.world.id===satellite.parent)!;
-        const radius=moonOrbitRadius(p.world,amount);
-        p.root.position.set(...satelliteOffset(p.world,simulation,amount)).add(parent.root.position);
-        p.orbit!.position.copy(parent.root.position);p.orbit!.scale.setScalar(radius);
-      }else{p.real=positionAt(p.world,simulation);p.root.position.set(...displayPosition(p.real,p.world.id,amount));}
+        p.root.position.set(...satelliteOffset(p.world,simulation,amount,expanded)).add(parent.root.position);
+        p.orbit!.position.copy(parent.root.position);
+      }else{p.real=positionAt(p.world,simulation);p.root.position.set(...displayPosition(p.real,p.world.id,amount,expanded));}
       const diameter=diameterAt(p.world,amount);p.root.scale.setScalar(diameter);p.mesh.rotation.y=spinAt(p.world,simulation);
-      if(satellite)p.mesh.rotation.y+=satellite.phase;
       p.target.position.copy(p.root.position);p.target.radius=diameter*.5*(p.world.id==='saturn'?2.3:1);
     }
     const days=daysSinceJ2000(simulation);
+    const radii=normalRadii(expanded);
     for(const {belt,data,array,points,target} of beltObjects){
       for(let i=0;i<data.length;i++){
-        const d=data[i],theta=d.phase+days*d.motion,r=mix(d.a,NORMAL_RADII[belt.id]+(d.fraction*2-1)*belt.halfWidth,amount);
+        const d=data[i],theta=d.phase+days*d.motion,r=mix(d.a,radii[belt.id]+(d.fraction*2-1)*beltHalfWidth(belt.id,expanded),amount);
         const inclination=mix(d.inclination,.012,amount),phase=theta-d.node;
         // Rotate a circular Kepler orbit through its own ascending node and inclination.
         const x=r*Math.cos(phase),z=r*Math.sin(phase),c=Math.cos(d.node),s=Math.sin(d.node);
         array[i*3]=x*c-z*Math.cos(inclination)*s;array[i*3+1]=z*Math.sin(inclination);array[i*3+2]=-(x*s+z*Math.cos(inclination)*c);
       }
       points.geometry.getAttribute('position').needsUpdate=true;
-      const r=mix((belt.inner+belt.outer)/2,NORMAL_RADII[belt.id],amount),angle=belt.id==='kuiper'?2.35:.55;
+      const r=mix((belt.inner+belt.outer)/2,radii[belt.id],amount),angle=belt.id==='kuiper'?2.35:.55;
       target.position.set(Math.cos(angle)*r,0,-Math.sin(angle)*r);target.radius=0;
     }
     updateOrbits();
@@ -242,27 +256,31 @@ export function installOrrery(onOpen:()=>void) {
   function updateLabels(seconds:number){
     ink.clearRect(0,0,width,height);if(!labelsVisible)return;
     const pxPerUnit=height/(camera.top-camera.bottom)*camera.zoom;
-    const projected=targets.map(target=>{const p=target.position.clone().project(camera);return {target,x:(p.x+1)*width/2,y:(1-p.y)*height/2,z:p.z,r:target.radius*pxPerUnit};});
+    const projected=targets.filter(target=>target.enabled).map(target=>{const p=target.position.clone().project(camera);return {target,x:(p.x+1)*width/2,y:(1-p.y)*height/2,z:p.z,r:target.radius*pxPerUnit};});
     const tools=$<HTMLElement>('.orrery-view-tools');
     const occupied:LabelRect[]=[{x:tools.offsetLeft,y:tools.offsetTop,w:tools.offsetWidth,h:tools.offsetHeight},{x:0,y:height-35,w:width,h:35}];
     const pane=$<HTMLElement>('.orrery-info');if(!pane.hidden)occupied.push({x:pane.offsetLeft,y:pane.offsetTop,w:pane.offsetWidth,h:pane.offsetHeight});
     const bodyRects=projected.filter(p=>p.r>3).map(p=>({x:p.x-p.r,y:p.y-p.r,w:p.r*2,h:p.r*2}));
     // Preserve priority as apparent radii change; a moving world must not
     // continuously steal another label's slot.
-    projected.sort((a,b)=>Number(b.target.id===selected)-Number(a.target.id===selected));
+    projected.sort((a,b)=>Number(b.target.id===selected)-Number(a.target.id===selected)||Number(isExtraWorld(a.target.id))-Number(isExtraWorld(b.target.id)));
     ink.font="11px 'Segoe UI',system-ui,sans-serif";
     for(const p of projected){
       const label=p.target.label;
       if(p.z< -1||p.z>1||p.x<0||p.x>width||p.y<0||p.y>height){label.hidden=true;drawnLabels.delete(p.target.id);continue;}
+      // Extra names appear as their system becomes readable. The selected body
+      // always gets first claim on a label, even at physical scale.
+      const moon=ALL_MOONS.find(m=>m.id===p.target.id);
+      if(isExtraWorld(p.target.id)&&p.target.id!==selected&&following!==moon?.satellite!.parent&&p.r<2.3){label.hidden=true;drawnLabels.delete(p.target.id);continue;}
       const w=Math.ceil(ink.measureText(p.target.name).width)+27,h=23;
       let anchorX=p.x,anchorY=p.y,gap=p.r+9;
-      const world=MOONS.find(m=>m.id===p.target.id);
-      if(world && following!==world.id){
+      const world=moon;
+      if(world && following!==world.id&&(!expanded||moonOrbitRadius(world,amount,expanded)*pxPerUnit<45)){
         const parent=projected.find(candidate=>candidate.target.id===world.satellite!.parent)!;
-        // Reserve the entire moon system. Ganymede's name stays beside Jupiter
-        // while its leader follows the moon, even at conjunction.
+        // Small systems keep their labels outside the parent. At close range,
+        // each moon labels its own position so dozens of names can spread out.
         anchorX=parent.x;anchorY=parent.y;
-        gap=Math.max(parent.r,moonOrbitRadius(world,amount)*pxPerUnit+p.r)+9;
+        gap=Math.max(parent.r,moonOrbitRadius(world,amount,expanded)*pxPerUnit+p.r)+9;
       }
       const candidates:LabelRect[]=[];
       for(const pad of [0,17,35,60,90])candidates.push({x:anchorX+gap+pad,y:anchorY-h/2,w,h},{x:anchorX-w/2,y:anchorY-gap-h-pad,w,h},{x:anchorX-gap-w-pad,y:anchorY-h/2,w,h},{x:anchorX-w/2,y:anchorY+gap+pad,w,h});
@@ -280,7 +298,7 @@ export function installOrrery(onOpen:()=>void) {
   }
   function resize(){
     width=Math.max(1,mount.clientWidth);height=Math.max(1,mount.clientHeight);
-    renderer.setSize(width,height,false);const extent=outerRadius(amount)*1.13,aspect=width/height;
+    renderer.setSize(width,height,false);const extent=outerRadius(amount,expanded)*1.13,aspect=width/height;
     const halfHeight=extent/Math.min(1,aspect);camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
     const dpr=Math.min(devicePixelRatio,2);renderer.setPixelRatio(dpr);labelCanvas.width=Math.round(width*dpr);labelCanvas.height=Math.round(height*dpr);ink.setTransform(dpr,0,0,dpr,0,0);controls.handleResize();
     drawnLabels.clear();
@@ -309,6 +327,7 @@ export function installOrrery(onOpen:()=>void) {
       updateUI();lastUI=now;
       const pixelsPerUnit=height/(camera.top-camera.bottom)*camera.zoom*renderer.getPixelRatio();
       for(const p of planets){
+        if(!p.target.enabled)continue;
         const position=p.root.position.clone().project(camera),radius=diameterAt(p.world,amount)*pixelsPerUnit/2;
         const visible=position.z>=-1&&position.z<=1&&Math.abs(position.x)<=1+radius/(width/2)&&Math.abs(position.y)<=1+radius/(height/2);
         p.surface.update(visible?radius*2:0,now);
@@ -328,16 +347,39 @@ export function installOrrery(onOpen:()=>void) {
   dialog.querySelectorAll<HTMLButtonElement>('[data-scale]').forEach(button=>button.onclick=()=>{slider.value=button.dataset.scale!;slider.dispatchEvent(new Event('input'));});
   dialog.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button=>button.onclick=()=>fit(button.dataset.view));
   labelToggle.onchange=()=>{labelsVisible=labelToggle.checked;$('.orrery-labels').hidden=!labelsVisible;ink.clearRect(0,0,width,height);};
-  orbitToggle.onchange=()=>{orbitsVisible=orbitToggle.checked;planets.forEach(p=>{if(p.orbit)p.orbit.visible=orbitsVisible;});};
+  orbitToggle.onchange=()=>{orbitsVisible=orbitToggle.checked;planets.forEach(p=>{if(p.orbit)p.orbit.visible=orbitsVisible&&p.target.enabled;});};
+  catalogueToggle.onchange=()=>{
+    expanded=catalogueToggle.checked;
+    const previous=ALL_WORLDS.find(w=>w.id===selected);
+    const followed=ALL_WORLDS.find(w=>w.id===following);
+    if(!expanded&&isExtraWorld(selected))selected=previous?.satellite?.parent??'asteroids';
+    if(!expanded&&isExtraWorld(following))following=followed?.satellite?.parent??'';
+    targets.forEach(target=>{target.enabled=expanded||!isExtraWorld(target.id);if(!target.enabled)target.label.hidden=true;});
+    $<HTMLSelectElement>('#orrery-inspect').innerHTML=inspectOptions(expanded);
+    planets.forEach(p=>{if(!p.target.enabled)p.surface.releaseDetails();});
+    renderedDate=NaN;orbitScale=NaN;placements.clear();drawnLabels.clear();
+    resize();updateScene();inspect(selected);
+    if(following)focusWorld(following);
+    updateStatus(`${expanded?`${ALL_MOONS.length} moons · ${ASTEROIDS.length} named belt bodies`:'Main worlds'} · ${running?'Running':'Paused'}`);
+  };
   $<HTMLSelectElement>('#orrery-inspect').onchange=event=>inspect((event.target as HTMLSelectElement).value);
   $('.orrery-info-close').onclick=()=>inspect('');
-  $('.orrery-focus').onclick=()=>{
-    const p=planets.find(p=>p.world.id===selected);if(!p)return;
+  function focusWorld(id:string){
+    const p=planets.find(p=>p.world.id===id&&p.target.enabled);if(!p)return;
     const offset=camera.position.clone().sub(controls.target);
     controls.target.copy(p.root.position);camera.position.copy(p.root.position).add(offset);following=p.world.id;
-    const diameter=diameterAt(p.world,amount)*(p.world.id==='saturn'?2.3:1);
-    camera.zoom=THREE.MathUtils.clamp((camera.top-camera.bottom)/(diameter*2.8),controls.minZoom,controls.maxZoom);
+    const children=moonsFor(expanded).filter(m=>m.satellite!.parent===id);
+    const radius=p.world.satellite||p.world.kepler?diameterAt(p.world,amount)/2:
+      Math.max(p.target.radius,...children.map(m=>mix(m.satellite!.distanceKm*(1+m.satellite!.eccentricity)/AU_KM,moonOrbitRadius(m,1,expanded),amount)+diameterAt(m,amount)/2));
+    const span=Math.min(camera.top-camera.bottom,camera.right-camera.left);
+    camera.zoom=THREE.MathUtils.clamp(span/(radius*2.8),controls.minZoom,controls.maxZoom);
     camera.updateProjectionMatrix();controls.update();
+  }
+  $('.orrery-focus').onclick=()=>{
+    focusWorld(selected);
+    // Let the requested close-up use the phone's narrow stage. Selecting a
+    // label or another Explore entry brings the information card back.
+    if(width<700){$('.orrery-info').hidden=true;drawnLabels.clear();}
   };
   play.onclick=()=>{running=!running;last=undefined;updateUI();updateStatus();};
   $('#orrery-direction').onclick=()=>{direction*=-1;$('#orrery-direction').textContent=direction<0?'← Reverse':'Forward →';$('#orrery-direction').setAttribute('aria-pressed',String(direction<0));$('#orrery-direction').title=direction<0?'Run time forwards':'Reverse time';updateStatus();};
@@ -361,7 +403,7 @@ export function installOrrery(onOpen:()=>void) {
   renderer.domElement.addEventListener('pointerup',event=>{
     if(!pointerStart||pointerStart.id!==event.pointerId||(event.pointerType==='touch'&&touchPan.suppressTap)||Math.hypot(event.clientX-pointerStart.x,event.clientY-pointerStart.y)>5){pointerStart=undefined;return;}pointerStart=undefined;
     const rect=renderer.domElement.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top,pxPerUnit=height/(camera.top-camera.bottom)*camera.zoom;
-    const candidates=planets.map(p=>{const v=p.root.position.clone().project(camera);return {id:p.world.id,z:v.z,d:Math.hypot((v.x+1)*width/2-x,(1-v.y)*height/2-y),r:Math.max(9,p.target.radius*pxPerUnit)};}).filter(p=>p.z>=-1&&p.z<=1&&p.d<=p.r).sort((a,b)=>a.z-b.z);
+    const candidates=planets.filter(p=>p.target.enabled).map(p=>{const v=p.root.position.clone().project(camera);return {id:p.world.id,z:v.z,d:Math.hypot((v.x+1)*width/2-x,(1-v.y)*height/2-y),r:Math.max(9,p.target.radius*pxPerUnit)};}).filter(p=>p.z>=-1&&p.z<=1&&p.d<=p.r).sort((a,b)=>a.z-b.z);
     if(candidates.length)inspect(candidates[0].id);
   });
   stage.addEventListener('keydown',event=>{if(event.target===renderer.domElement&&event.key==='Home')fit();});
