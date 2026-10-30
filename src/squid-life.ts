@@ -1,24 +1,25 @@
 import { HOLE_OPEN_SECONDS, HOLE_FREEZE_SECONDS, SQUID_DIVE_SECONDS, SQUID_EMERGE_SECONDS, SQUID_HOLE_RADIUS } from './squid.ts';
+import type { SceneCharacter, ActiveIceHole } from './scene-types.ts';
 
 /** A hole exists only after the squid starts hammering. Travelling targets are
  * just positions on solid ice, not pre-opened or reusable pools. */
-function openIceHole(ch, x) {
-  const hole = { x, phase: 'opening', timer: 0, seed: Math.random() * 1000, reserved: true };
-  ch.holes.push(hole);
+function openIceHole(ch: SceneCharacter, x: number) {
+  const hole: ActiveIceHole = { x, phase: 'opening', timer: 0, seed: Math.random() * 1000, reserved: true };
+  (ch.holes ??= []).push(hole);
   return hole;
 }
 
-function freeze(hole) {
+function freeze(hole: ActiveIceHole | null | undefined) {
   if (hole) Object.assign(hole, { phase: 'freezing', timer: 0, reserved: false });
 }
 
-export function releaseSquidTarget(ch) {
+export function releaseSquidTarget(ch: SceneCharacter) {
   ch.holeTarget = null;
   // A fright can interrupt a surface hammer swing. Seal the abandoned crack.
   if (ch.state === 'hammering') { freeze(ch.hole); ch.hole = null; }
 }
 
-export function headForSquidHole(ch, x: number, state = 'walking') {
+export function headForSquidHole(ch: SceneCharacter, x: number, state = 'walking') {
   releaseSquidTarget(ch);
   ch.holeTarget = { x };
   ch.direction = x >= ch.x ? 1 : -1;
@@ -30,7 +31,8 @@ export function headForSquidHole(ch, x: number, state = 'walking') {
 }
 
 /** Stop at the rim and break the ice before attempting to dive. */
-export function enterSquidHole(ch) {
+export function enterSquidHole(ch: SceneCharacter) {
+  if (!ch.holeTarget) return;
   ch.x = ch.walkTarget;
   ch.hole = openIceHole(ch, ch.holeTarget.x);
   ch.holeTarget = null;
@@ -39,20 +41,20 @@ export function enterSquidHole(ch) {
   ch.holeX = ch.hole.x - ch.x;
 }
 
-export function beginSquidBreakout(ch) {
+export function beginSquidBreakout(ch: SceneCharacter) {
   ch.hole = openIceHole(ch, ch.x);
   ch.state = 'breaking';
   ch.stateTimer = 0;
   ch.holeX = 0;
 }
 
-export function squidUnderIce(ch) {
+export function squidUnderIce(ch: SceneCharacter | null) {
   return ch && ch.type === 'squid' && ['diving', 'submerged', 'breaking', 'emerging'].includes(ch.state);
 }
 
 /** Called after main advances stateTimer. Holes use the same presentation clock
  * as the hammer, so cracks, the last strike and the dive stay synchronized. */
-export function updateSquidHoles(ch, dt: number, freshSpot: (ch: any) => number) {
+export function updateSquidHoles(ch: SceneCharacter, dt: number, freshSpot: (ch: SceneCharacter) => number) {
   if (ch.type !== 'squid' || !ch.holes) return false;
   for (const hole of ch.holes) {
     hole.timer += dt;
@@ -64,14 +66,17 @@ export function updateSquidHoles(ch, dt: number, freshSpot: (ch: any) => number)
   const hole = ch.hole;
   switch (ch.state) {
     case 'hammering':
+      if (!hole) return false;
       if (hole.phase === 'open') {
         ch.state = 'diving'; ch.stateTimer = 0; ch.diveStartX = ch.x;
       }
       return true;
     case 'diving': {
+      if (!hole) return false;
       const p = Math.min(1, ch.stateTimer / SQUID_DIVE_SECONDS);
       const hop = Math.min(1, p / .22);
-      ch.x = ch.diveStartX + (hole.x - ch.diveStartX) * hop * hop * (3 - 2 * hop);
+      const startX = ch.diveStartX ?? ch.x;
+      ch.x = startX + (hole.x - startX) * hop * hop * (3 - 2 * hop);
       ch.holeX = hole.x - ch.x;
       if (p >= 1) {
         freeze(hole);
@@ -83,6 +88,7 @@ export function updateSquidHoles(ch, dt: number, freshSpot: (ch: any) => number)
       return true;
     }
     case 'submerged':
+      if (ch.exitX === undefined) return false;
       ch.x += ch.direction * 1.1 * dt;
       if ((ch.exitX - ch.x) * ch.direction <= 0) {
         ch.x = ch.exitX;
@@ -90,11 +96,13 @@ export function updateSquidHoles(ch, dt: number, freshSpot: (ch: any) => number)
       }
       return true;
     case 'breaking':
+      if (!hole) return false;
       if (hole.phase === 'open') {
         ch.state = 'emerging'; ch.stateTimer = 0; ch.holeX = 0;
       }
       return true;
     case 'emerging': {
+      if (!hole) return false;
       const p = Math.min(1, ch.stateTimer / SQUID_EMERGE_SECONDS);
       const hop = Math.max(0, (p - .66) / .34);
       // Clear both the pool's radius and the trailing tentacles before landing.

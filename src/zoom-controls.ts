@@ -51,7 +51,7 @@ export class ZoomControls {
     };
     // The labels and controls sit above the canvas. Their wheel events do not
     // reach it, so give every part of the zoom surface the same handler.
-    for (const target of [canvas, this.markers, this.panel]) {
+    for (const target of [canvas, this.markers, this.panel] as HTMLElement[]) {
       target.addEventListener('wheel', wheelZoom, { passive: false });
     }
     canvas.addEventListener('pointerdown', event => {

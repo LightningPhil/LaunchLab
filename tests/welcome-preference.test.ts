@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { WELCOME_STORAGE_KEY, welcomeHidden, saveWelcomePreference } from '../src/welcome-preference.ts';
 
 test('welcome suppression survives a new session and can be reversed from Settings',()=>{
-  const values=new Map(),storage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
+  const values=new Map<string,string>(),storage:Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
   assert.equal(welcomeHidden(storage),false);
   assert.equal(saveWelcomePreference(storage,true),true);
   assert.equal(values.get(WELCOME_STORAGE_KEY),'yes');

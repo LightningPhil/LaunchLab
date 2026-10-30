@@ -5,16 +5,19 @@ import { RocketPhysics } from '../src/rocket_physics.ts';
 import { RocketPropellants } from '../src/rocket_propellants.ts';
 import { resolveEnvironment, pressureAtAltitude, classifyTrajectory } from '../src/environment.ts';
 
+import type { RocketConfig } from '../src/rocket_physics.ts';
+
 const config = {
   propellantId: 'LOX_RP1', MR: 2.56, Pc_bar: 100, epsilon: 20,
   throatDia_mm: 15, dryMass: 100, propMass: 8, launchAngle: 85,
   guidanceMode: 'fixed', etaC: 0.95, etaN: 0.95,
-};
-function near(actual, expected, tolerance = 1e-7) {
+} satisfies RocketConfig;
+function near(actual: number | null, expected: number | null, tolerance = 1e-7) {
+  assert.ok(actual !== null && expected !== null);
   assert.ok(Math.abs(actual - expected) <= tolerance,
     `expected ${actual} to be within ${tolerance} of ${expected}`);
 }
-function vacuumRocket(overrides = {}) {
+function vacuumRocket(overrides: Partial<RocketConfig> = {}) {
   return RocketPhysics.createRocketState({ ...config, launchAngle: 90, Pa_Pa: 0, ...overrides });
 }
 
@@ -75,6 +78,7 @@ test('a powered impact keeps incoming speed and fuel use without inventing burno
   Object.assign(initial, { y: 1, vy: -30, launched: true });
   const result = RocketPhysics.stepRocket(initial, 0.2, 0, RocketPhysics.guidanceFixed(-90));
   assert.equal(result.outcome, 'impact');
+  assert.ok(result.impactTime !== null && result.impactSpeed !== null && result.impactVy !== null);
   assert.equal(result.burnoutTime, null);
   assert.ok(result.impactTime > 0 && result.impactTime < 1 / 30);
   assert.ok(result.impactSpeed > 30);
@@ -97,9 +101,9 @@ test('flat ballistic rocket records analytical apex and contact times within a l
 });
 
 test('prograde guidance follows descending velocity and fixed means fixed', () => {
-  near(RocketPhysics.guidanceProgradeLock(1, 90).getAngle({ vx: 10, vy: -10 }), -45);
+  near(RocketPhysics.guidanceProgradeLock(1, 90).getAngle({ ...vacuumRocket(), vx: 10, vy: -10 }), -45);
   const fixed = RocketPhysics.buildGuidance({ ...config, launchAngle: 83 });
-  near(fixed.getAngle({ vx: 100, vy: -100, time: 20 }), 83);
+  near(fixed.getAngle({ ...vacuumRocket(), vx: 100, vy: -100, time: 20 }), 83);
 });
 
 test('pitch-program boundaries are integrated identically when an enclosing step is split', () => {
@@ -204,7 +208,7 @@ test('an orbit must clear the planet; escape must be unpowered and outgoing', ()
   const orbitClass = classifyTrajectory(orbit, gravity);
   assert.equal(orbitClass.kind, 'orbit');
   near(orbitClass.periapsisAltitude, altitude, 0.2);
-  assert.ok(orbitClass.period > 0);
+  assert.ok(orbitClass.period !== null && orbitClass.period > 0);
   const lowSpeed = Physics.createProjectile(0, altitude, 1000, 0, 1, radius);
   assert.equal(classifyTrajectory(lowSpeed, gravity).kind, 'returning');
   const escape = Physics.createProjectile(0, altitude, circularSpeed * 1.5, 90, 1, radius);

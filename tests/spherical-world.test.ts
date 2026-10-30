@@ -5,7 +5,7 @@ import { Physics } from '../src/physics.ts';
 import { RocketPhysics } from '../src/rocket_physics.ts';
 import { surfacePosition, radialGravity, gravityAtAltitude } from '../src/spherical-world.ts';
 
-const near = (actual, expected, tolerance = 1e-7) => assert.ok(Math.abs(actual - expected) <= tolerance,
+const near = (actual:number, expected:number, tolerance = 1e-7) => assert.ok(Math.abs(actual - expected) <= tolerance,
   `${actual} differs from ${expected} by more than ${tolerance}`);
 
 test('every world projects onto its physical radius, including the far side and multiple revolutions', () => {

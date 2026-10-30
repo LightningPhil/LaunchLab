@@ -1,7 +1,4 @@
-# Normalise line endings on every platform. Source files use LF in the
-# working tree too, so the generated portable build (dist-single/index.html,
-# which inlines index.html) is byte-identical whether built on Windows,
-# macOS, Linux or CI, and never shows a spurious diff.
+# Normalise source line endings across Windows, macOS, Linux and CI.
 * text=auto eol=lf
 
 # Binary assets.

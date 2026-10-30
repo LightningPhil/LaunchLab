@@ -67,6 +67,33 @@ button { touch-action: manipulation; }
 .rocket-steering .field-note { margin:0; }
 .rocket-steering .slider-row { margin:0; }
 .rocket-steering #steering-help { margin-top:8px; }
+.steering-intro { font-size:12px; line-height:1.6; }
+.steering-intro b { display:block; color:#315f4c; }
+.steering-practice .settings-reset { background:#285e50; color:#fffdf4; border-color:#285e50; font-size:13px; }
+.steering-practice .settings-reset:hover:enabled { background:#1f4d41; }
+.steering-practice .settings-reset-note { margin-bottom:0; }
+.steering-lesson { font-size:12px; color:#436152; line-height:1.6; }
+.steering-lesson summary { cursor:pointer; font-weight:700; padding:6px 0; }
+.steering-lesson ol { padding-left:19px; margin:8px 0; }
+.steering-lesson li + li { margin-top:8px; }
+.steering-number { display:flex; align-items:center; gap:5px; flex-shrink:0; color:#315f4c; font-size:12px; }
+.steering-number input { width:80px; min-height:36px; padding:5px 7px; border:1px solid #a7bca1; border-radius:7px; background:#fffdf5; color:#244f40; font:600 13px var(--font-mono); }
+.steering-number input:focus-visible { outline:2px solid #36765e; outline-offset:2px; }
+.steering-adjust { display:flex; flex-wrap:wrap; gap:6px; margin:5px 0 9px; }
+.steering-adjust button { flex:1; min-height:36px; padding:6px 8px; border:1px solid #b5c7b0; border-radius:7px; background:#fffdf5; color:#315f4c; font-size:11px; font-weight:600; }
+.steering-adjust button:hover:enabled { background:#e3ebd9; }
+.steering-plan { margin:0; padding:12px; background:#fffdf5; border:1px solid #d3ddc7; border-radius:10px; }
+.steering-plan figcaption { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:#315f4c; font-weight:700; }
+.steering-plan figcaption span { font-weight:400; font-size:10px; }
+.steering-plan svg { display:block; width:100%; margin:8px 0; overflow:visible; }
+.steering-plan svg text { font:10px var(--font-mono); fill:#53665e; }
+.steering-grid { fill:none; stroke:#cbd4c1; stroke-width:1; }
+#steering-plan-line { fill:none; stroke:#316f59; stroke-width:3; stroke-linejoin:round; }
+#steering-cutoff-line { fill:none; stroke:#a96335; stroke-width:2; stroke-dasharray:4 3; }
+.steering-check { border-left:3px solid #aa8145; padding:3px 0 3px 10px; line-height:1.6; }
+.steering-debrief { padding:12px; border:1px solid #b5c7b0; background:#e4eddc; border-radius:10px; }
+.steering-debrief h3 { margin:0 0 7px; font-size:12px; color:#315f4c; }
+.rocket-steering [hidden] { display:none !important; }
 .orbit-example .settings-reset { background:#e0ebce; border-color:#90ae80; }
 .orbit-example .settings-reset:hover:enabled { background:#d4e3bc; }
 .orbit-example .settings-reset-note { margin:7px 0 0; }

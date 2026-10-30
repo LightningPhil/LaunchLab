@@ -5,7 +5,7 @@ import { COMPACT_LAYOUT_QUERY, observeDisplay } from './display-layout.ts';
 let setupNozzle: HTMLCanvasElement;
 
 /** The same recorded engine sketch is available inside compact rocket setup. */
-export function drawSetupNozzle(data: any) {
+export function drawSetupNozzle(data: Parameters<typeof NozzleRender.drawPanel>[3]) {
   if (!isSetupNozzleVisible()) return;
   const width = setupNozzle.clientWidth, height = 204;
   const ratio = Math.max(1, window.devicePixelRatio || 1);

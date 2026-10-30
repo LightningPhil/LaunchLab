@@ -2,6 +2,8 @@
 
 Reviewed: 2 October 2026.
 
+> Historical validation: portable-build checks below describe the project at review time. That build was retired on 20 October 2026; current build instructions are in [README](../../README.md#validate-and-build).
+
 ## Scope and method
 
 The review covers all 18 articles at all three reading levels (54 readings), all five advanced nozzle topics at all three levels (15 more readings), article statistics and equations, moon-family membership, the solar and belt maps, diagram captions, exhibit histories, tooltips, readouts and model explanations. The cannon, rocket and nozzle calculations were reviewed alongside the prose so that an explanation agrees with the experiment it describes.

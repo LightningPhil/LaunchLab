@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { displayProfile } from '../src/display-layout.ts';
 
-const profile=(width,height,pixelRatio=1,viewportScale=1)=>displayProfile({width,height,pixelRatio,viewportScale,screenWidth:width,screenHeight:height});
+const profile=(width:number,height:number,pixelRatio=1,viewportScale=1)=>displayProfile({width,height,pixelRatio,viewportScale,screenWidth:width,screenHeight:height});
 
 test('scaled tablet and short landscape views keep a full field with compact controls',()=>{
   for(const [width,height] of [[1280/1.5,800/1.5],[1536/1.5,864/1.5],[1920/1.5,1080/1.5-110],[1024,768],[768,1024],[390,844],[1366,600]]){

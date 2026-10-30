@@ -13,49 +13,68 @@ const G0 = 9.80665;
 const DEG_TO_RAD = Math.PI / 180;
 const RAD_TO_DEG = 180 / Math.PI;
 
-function computeMassFlow(Pc_Pa, At, cStarEff) {
+export type GuidanceMode = 'fixed' | 'pitch_program' | 'prograde_lock' | 'orbit_assist';
+export function guidanceMode(value: string): GuidanceMode {
+  return value === 'pitch_program' || value === 'prograde_lock' || value === 'orbit_assist' ? value : 'fixed';
+}
+export interface RocketConfig {
+  propellantId: string; MR: number; Pc_bar: number; epsilon: number; throatDia_mm: number;
+  dryMass: number; propMass: number; launchAngle: number;
+  guidanceMode?: GuidanceMode; etaC?: number; etaN?: number;
+  pitchEnd?: number; pitchT1?: number; pitchT2?: number; progradeVmin?: number; orbitAltitudeKm?: number;
+  /** Flight seconds to stop a manual burn; zero/omitted burns to depletion. */
+  cutoffTime?: number;
+  gravity?: number; planetRadius?: number; environment?: Environment | null; Pa_Pa?: number;
+  propMassMultiplier?: number;
+}
+export interface RocketPredictionOptions {
+  dt?: number; maxTime?: number; startX?: number; startY?: number; planetRadius?: number; guidance?: Guidance;
+}
+
+function computeMassFlow(Pc_Pa: number, At: number, cStarEff: number) {
   if (!(cStarEff > 0) || !(Pc_Pa > 0) || !(At > 0)) return 0;
   const flow = Pc_Pa * At / cStarEff;
   return Number.isFinite(flow) ? flow : 0;
 }
-function computeThrust(CfEff, Pc_Pa, At) {
+function computeThrust(CfEff: number, Pc_Pa: number, At: number) {
   const force = CfEff * Pc_Pa * At;
   return Number.isFinite(force) ? Math.max(0, force) : 0;
 }
-function computeIsp(F, mdot, g0 = G0) {
+function computeIsp(F: number, mdot: number, g0: number = G0) {
   return mdot > 0 && g0 > 0 ? F / (mdot * g0) : 0;
 }
-function computeExhaustVelocity(Isp, g0 = G0) { return g0 * Isp; }
-function computeDeltaV(Isp, m0, mf, g0 = G0) {
+function computeExhaustVelocity(Isp: number, g0: number = G0) { return g0 * Isp; }
+function computeDeltaV(Isp: number, m0: number, mf: number, g0: number = G0) {
   return mf > 0 && m0 > mf ? g0 * Isp * Math.log(m0 / mf) : 0;
 }
-function computeThrustToWeight(F, m0, g) {
+function computeThrustToWeight(F: number, m0: number, g: number) {
   if (!(m0 > 0) || g < 0) return 0;
   return g === 0 ? (F > 0 ? Infinity : 0) : F / (m0 * g);
 }
-function computeBurnTime(mProp, mdot) { return mdot > 0 ? Math.max(0, mProp) / mdot : Infinity; }
-function solveThroatForThrust(Ftarget, CfEff, Pc_Pa) {
+function computeBurnTime(mProp: number, mdot: number) { return mdot > 0 ? Math.max(0, mProp) / mdot : Infinity; }
+function solveThroatForThrust(Ftarget: number, CfEff: number, Pc_Pa: number) {
   return CfEff > 0 && Pc_Pa > 0 ? Math.max(0, Ftarget) / (CfEff * Pc_Pa) : 0;
 }
-function throatAreaFromDiameter(d_mm) {
+function throatAreaFromDiameter(d_mm: number) {
   return Number.isFinite(d_mm) && d_mm > 0 ? Math.PI * (d_mm / 2000) ** 2 : 0;
 }
 
 export interface Guidance {
   mode: string;
-  getAngle(state: any): number;
+  getAngle(state: RocketState): number;
   boundaries?: number[];
   getThrottle?: (state: any) => number;
   shouldCutoff?: (state: any) => boolean;
+  cutoffReason?: 'orbit' | 'planned';
 }
 
 /** Simple feedback guidance, using only available thrust and propellant. It
  * accelerates upward, turns as radial demand falls, then trims toward a circle.
  * Throttle is an ideal duty cycle: thrust and flow scale together at fixed Isp. */
-function guidanceOrbit(config): Guidance {
+function guidanceOrbit(config: RocketConfig): Guidance {
   const gravity = config.gravity ?? config.environment?.gravity ?? 9.81;
   const altitude = Math.max(1000, (config.orbitAltitudeKm ?? 200) * 1000);
-  function command(state) {
+  function command(state: RocketState) {
     const R = state.planetRadius, r = R + state.y, mu = gravity * R * R;
     const acceleration = engineAt(state, state.y).thrust / state.mass;
     if (!(acceleration > 0) || !(R > 0)) return { angle: 90, throttle: 1 };
@@ -78,24 +97,24 @@ function guidanceOrbit(config): Guidance {
         && orbit.apoapsisAltitude! <= altitude * 1.02;
     } };
 }
-function guidanceFixed(theta0): Guidance { return { mode: 'fixed', getAngle: () => theta0 }; }
-function guidancePitchProgram(theta0, thetaF, t1, t2): Guidance {
+function guidanceFixed(theta0: number): Guidance { return { mode: 'fixed', getAngle: () => theta0 }; }
+function guidancePitchProgram(theta0: number, thetaF: number, t1: number, t2: number): Guidance {
   return { mode: 'pitch_program', boundaries: [t1, t2], getAngle: state => {
     if (t2 <= t1) return state.time < t1 ? theta0 : thetaF;
     const fraction = Math.max(0, Math.min(1, (state.time - t1) / (t2 - t1)));
     return theta0 + (thetaF - theta0) * fraction;
   } };
 }
-function guidanceProgradeLock(vMin, fallbackTheta): Guidance {
+function guidanceProgradeLock(vMin: number, fallbackTheta: number): Guidance {
   return { mode: 'prograde_lock', getAngle: state => {
     if (Math.hypot(state.vx, state.vy) < Math.max(0.001, vMin)) return fallbackTheta;
     return Math.atan2(state.vy, state.vx) * RAD_TO_DEG;
   } };
 }
-function buildGuidance(config): Guidance {
+function steeringGuidance(config: RocketConfig): Guidance {
   if (config.guidanceMode === 'orbit_assist') return guidanceOrbit(config);
   if (config.guidanceMode === 'pitch_program') {
-    return guidancePitchProgram(config.launchAngle, config.pitchEnd, config.pitchT1, config.pitchT2);
+    return guidancePitchProgram(config.launchAngle, config.pitchEnd ?? 45, config.pitchT1 ?? 5, config.pitchT2 ?? 20);
   }
   if (config.guidanceMode === 'prograde_lock') {
     return guidanceProgradeLock(config.progradeVmin ?? 10, config.launchAngle);
@@ -103,19 +122,29 @@ function buildGuidance(config): Guidance {
   return guidanceFixed(config.launchAngle);
 }
 
-function environmentForConfig(config, gravity?): Environment | null {
+function buildGuidance(config: RocketConfig): Guidance {
+  const steering = steeringGuidance(config);
+  const cutoff = config.cutoffTime;
+  // A timer is an open-loop command, independent of altitude, speed or orbit.
+  // Orbit assist retains its own feedback controller and insertion cutoff.
+  if (config.guidanceMode === 'orbit_assist' || !Number.isFinite(cutoff) || !(cutoff! > 0)) return steering;
+  return { ...steering, boundaries: [...(steering.boundaries ?? []), cutoff!],
+    shouldCutoff: state => state.time >= cutoff!, cutoffReason: 'planned' };
+}
+
+function environmentForConfig(config: RocketConfig, gravity?: number): Environment | null {
   if (config.environment) return { ...config.environment };
   // Explicit pressure remains a constant-pressure legacy laboratory option.
   // Normal app runs pass a complete environment so altitude affects thrust.
   if (config.Pa_Pa !== undefined) return null;
-  if (Number.isFinite(gravity)) return resolveEnvironment(gravity);
-  if (Number.isFinite(config.gravity)) return resolveEnvironment(config.gravity);
+  if (typeof gravity === 'number' && Number.isFinite(gravity)) return resolveEnvironment(gravity);
+  if (typeof config.gravity === 'number' && Number.isFinite(config.gravity)) return resolveEnvironment(config.gravity);
   return null;
 }
-function ambientPressure(state, altitude) {
+function ambientPressure(state: Pick<RocketState, 'environment' | 'Pa_Pa'>, altitude: number) {
   return state.environment ? pressureAtAltitude(state.environment, altitude) : state.Pa_Pa;
 }
-function engineAt(state, altitude) {
+function engineAt(state: Pick<RocketState, 'environment' | 'Pa_Pa' | 'propellantId' | 'MR' | 'Pc_Pa' | 'epsilon' | 'etaC' | 'etaN' | 'At'>, altitude: number) {
   const pressure = ambientPressure(state, altitude);
   const perf = RocketPropellants.lookupPerformance(state.propellantId, state.MR, state.Pc_Pa, state.epsilon, pressure);
   const mdot = perf.choked
@@ -126,7 +155,7 @@ function engineAt(state, altitude) {
     flowRegime: perf.flowRegime, effectiveEpsilon: perf.effectiveEpsilon };
 }
 
-function createRocketState(config) {
+function createRocketState(config: RocketConfig) {
   if (!Number.isFinite(config.dryMass) || config.dryMass <= 0 ||
       !Number.isFinite(config.propMass) || config.propMass < 0 ||
       !Number.isFinite(config.launchAngle)) throw new RangeError('Rocket mass and launch angle must be finite; dry mass must be positive.');
@@ -149,7 +178,7 @@ function createRocketState(config) {
     launched: false, fizzled: false, mass: config.dryMass + config.propMass,
     outcome: 'flight' as 'flight' | 'impact' | 'no-liftoff', outcomeReason: '',
     burnoutTime: null as number | null, burnoutSpeed: null as number | null,
-    cutoffReason: null as 'orbit' | 'empty' | null,
+    cutoffReason: null as 'orbit' | 'planned' | 'empty' | null,
     apexTime: null as number | null, apexHeight: null as number | null,
     impactTime: null as number | null, impactSpeed: null as number | null,
     impactVx: null as number | null, impactVy: null as number | null,
@@ -165,7 +194,7 @@ function createRocketState(config) {
 export type RocketState = ReturnType<typeof createRocketState>;
 
 /** Local tangential/radial frame and inverse-square gravity in world space. */
-function frame(state, gravity) {
+function frame(state: RocketState, gravity: number) {
   const radius = state.planetRadius;
   if (!(radius > 0)) return { px: state.x, py: state.y, vx: state.vx, vy: state.vy,
     tx: 1, ty: 0, rx: 0, ry: 1, gx: 0, gy: -gravity };
@@ -175,7 +204,7 @@ function frame(state, gravity) {
     tx: state.wy / r, ty: -state.wx / r, rx: state.wx / r, ry: state.wy / r,
     gx: acceleration.x, gy: acceleration.y };
 }
-function setKinematics(state, px, py, vx, vy) {
+function setKinematics(state: RocketState, px: number, py: number, vx: number, vy: number) {
   if (!(state.planetRadius > 0)) {
     state.x = px; state.y = py; state.vx = vx; state.vy = vy;
     return;
@@ -192,7 +221,7 @@ function setKinematics(state, px, py, vx, vy) {
   state.vy = (vx * px + vy * py) / r;
   state.wx = px; state.wy = py; state.wvx = vx; state.wvy = vy;
 }
-function thrustDirection(state, guidance, gravity) {
+function thrustDirection(state: RocketState, guidance: Guidance, gravity: number) {
   const local = frame(state, gravity);
   const angle = guidance.getAngle(state) * DEG_TO_RAD;
   return { x: Math.cos(angle) * local.tx + Math.sin(angle) * local.rx,
@@ -202,7 +231,7 @@ function thrustDirection(state, guidance, gravity) {
 /** Exact constant-direction thrust integrals for linearly decreasing mass.
  * The series prevents cancellation in position when very little fuel burns.
  */
-function thrustIntegrals(mass, mdot, thrust, duration) {
+function thrustIntegrals(mass: number, mdot: number, thrust: number, duration: number) {
   if (!(thrust > 0) || !(mdot > 0) || !(duration > 0)) return { dv: 0, displacement: 0 };
   const fraction = Math.min(1 - Number.EPSILON, mdot * duration / mass);
   const logRatio = -Math.log1p(-fraction);
@@ -216,7 +245,7 @@ function thrustIntegrals(mass, mdot, thrust, duration) {
 /** Advance a segment whose duration cannot cross fuel depletion. No events here
  * so bisection can evaluate the identical continuous segment at intermediate t.
  */
-function advanceSegment(state, duration, gravity, guidance): RocketState {
+function advanceSegment(state: RocketState, duration: number, gravity: number, guidance: Guidance): RocketState {
   const next = { ...state };
   const local = frame(state, gravity);
   const burning = state.engineOn && state.mProp > 0;
@@ -263,7 +292,7 @@ function advanceSegment(state, duration, gravity, guidance): RocketState {
   return next;
 }
 
-function refineEvent(state, duration, gravity, guidance, above: (sample: RocketState) => boolean) {
+function refineEvent(state: RocketState, duration: number, gravity: number, guidance: Guidance, above: (sample: RocketState) => boolean) {
   let lo = 0, hi = duration;
   for (let i = 0; i < 38; i++) {
     const mid = (lo + hi) / 2;
@@ -271,7 +300,7 @@ function refineEvent(state, duration, gravity, guidance, above: (sample: RocketS
   }
   return advanceSegment(state, (lo + hi) / 2, gravity, guidance);
 }
-function segmentWithEvents(state, duration, gravity, guidance): RocketState {
+function segmentWithEvents(state: RocketState, duration: number, gravity: number, guidance: Guidance): RocketState {
   let next = advanceSegment(state, duration, gravity, guidance);
   if (state.vy > 0 && next.vy <= 0) {
     const apex = refineEvent(state, duration, gravity, guidance, sample => sample.vy > 0);
@@ -297,7 +326,7 @@ function segmentWithEvents(state, duration, gravity, guidance): RocketState {
   return next;
 }
 
-function stepRocket(state, dt, gravity, guidance = guidanceFixed(state.theta)): RocketState {
+function stepRocket(state: RocketState, dt: number, gravity: number, guidance = guidanceFixed(state.theta)): RocketState {
   if (!Number.isFinite(dt) || dt <= 0 || state.outcome === 'impact' || state.fizzled) return { ...state };
   if (!Number.isFinite(gravity) || gravity < 0) throw new RangeError('Gravity must be finite and non-negative.');
   let next: RocketState = { ...state };
@@ -316,8 +345,8 @@ function stepRocket(state, dt, gravity, guidance = guidanceFixed(state.theta)): 
     next.launched = true;
   }
   let remaining = dt;
-  // Split also at explicit pitch-program boundaries. There are at most two,
-  // followed by one depletion boundary, so this loop is strictly bounded.
+  // Split at turn times, planned cutoff and depletion so a timer cannot burn
+  // an extra timestep of fuel. These commands have at most four boundaries.
   for (let segment = 0; segment < 8 && remaining > 1e-12; segment++) {
     let duration = remaining;
     let fuelEnd = false;
@@ -342,7 +371,7 @@ function stepRocket(state, dt, gravity, guidance = guidanceFixed(state.theta)): 
       next = refineEvent(beforeSegment, duration, gravity, guidance, sample => !guidance.shouldCutoff!(sample));
       duration = next.time - beforeSegment.time;
       fuelEnd = false;
-      next.engineOn = false; next.cutoffReason = 'orbit';
+      next.engineOn = false; next.cutoffReason = guidance.cutoffReason ?? 'orbit';
       next.burnoutTime = next.time; next.burnoutSpeed = Math.hypot(next.vx, next.vy);
       next.thrustMagnitude = 0; next.mdot = 0;
     }
@@ -361,7 +390,7 @@ function stepRocket(state, dt, gravity, guidance = guidanceFixed(state.theta)): 
   return next;
 }
 
-function computePreLaunch(config, gravity) {
+function computePreLaunch(config: RocketConfig, gravity: number) {
   const environment = environmentForConfig(config, gravity);
   const state = createRocketState({ ...config, ...(environment ? { environment } : {}) });
   const engine = engineAt(state, 0);
@@ -380,9 +409,9 @@ function computePreLaunch(config, gravity) {
     flowRegime: engine.flowRegime, effectiveEpsilon: engine.effectiveEpsilon };
 }
 
-function predictTrajectory(config, gravity, options: any = {}) {
-  const dt = Number.isFinite(options.dt) && options.dt > 0 ? options.dt : 1 / 120;
-  const maxTime = Number.isFinite(options.maxTime) && options.maxTime > 0 ? Math.min(86400, options.maxTime) : 3600;
+function predictTrajectory(config: RocketConfig, gravity: number, options: RocketPredictionOptions = {}) {
+  const dt = typeof options.dt === 'number' && Number.isFinite(options.dt) && options.dt > 0 ? options.dt : 1 / 120;
+  const maxTime = typeof options.maxTime === 'number' && Number.isFinite(options.maxTime) && options.maxTime > 0 ? Math.min(86400, options.maxTime) : 3600;
   const launchX = options.startX ?? 0, launchY = options.startY ?? 0;
   const environment = environmentForConfig(config, gravity);
   const planetRadius = options.planetRadius ?? config.planetRadius ?? environment?.radius ?? 0;

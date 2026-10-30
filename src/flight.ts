@@ -3,16 +3,27 @@ import { RocketPhysics } from './rocket_physics.ts';
 import { pressureAtAltitude } from './environment.ts';
 import { ESCAPE_CENTRE_RADII, planBallisticCoast, sampleBallisticCoast, type BallisticCoast } from './ballistic-coast.ts';
 import { planOrbitalCoast, sampleOrbitalCoast, orbitalSampleTimes, orbitalEvents, type OrbitalCoast } from './orbital-coast.ts';
+import type { RocketConfig, RocketState, Guidance } from './rocket_physics.ts';
+import type { ProjectileState } from './physics.ts';
+import type { CannonConfig, LaunchSettings } from './launch-settings.ts';
+import type { Environment } from './environment.ts';
+
+export type FlightWorld = { gravity:number; planetRadius:number; environment?:Environment };
+export type CannonFlightConfig = CannonConfig & FlightWorld;
+export type RocketFlightConfig = RocketConfig & FlightWorld;
 
 export type FlightEvent = { time: number; kind: string; label: string };
-export type FlightRecord = {
-  id: number; mode: 'cannon' | 'rocket'; config: Readonly<Record<string, any>>;
+type FlightData = {
+  id: number;
   samples: any[]; events: FlightEvent[]; duration: number; outcome: string;
   maxHeight: number; minX: number; maxX: number; launchX: number;
   coast?: BallisticCoast;
   orbit?: OrbitalCoast;
   orbitLaps?: number;
 };
+export type FlightRecord = FlightData & (
+  {mode:'cannon'; config:Readonly<CannonFlightConfig>} | {mode:'rocket'; config:Readonly<RocketFlightConfig>}
+);
 export const PHYSICS_STEP = 1 / 120;
 export const MIN_CANNON_PATH_POINTS = 20;
 export const MAX_RECORD_TIME = 21600;
@@ -29,15 +40,19 @@ function freezeConfiguration<T>(value: T, seen = new WeakSet<object>()): T {
 
 /** One canonical run; rendering rate never enters either integrator. Yield often
  * so Reset can cancel even a very long orbital/low-thrust experiment. */
+export function recordFlight(mode:'cannon', config:CannonFlightConfig, initial:ProjectileState,
+  signal?:AbortSignal, options?:{maxTime?:number}):Promise<FlightRecord & {mode:'cannon'}>;
+export function recordFlight(mode:'rocket', config:RocketFlightConfig, initial:RocketState,
+  signal?:AbortSignal, options?:{maxTime?:number}):Promise<FlightRecord & {mode:'rocket'}>;
 export async function recordFlight(mode: FlightRecord['mode'], config: any, initial: any,
   signal?: AbortSignal, options: { maxTime?: number } = {}): Promise<FlightRecord> {
   const saved = freezeConfiguration(structuredClone(config));
-  const maxTime = Number.isFinite(options.maxTime) && options.maxTime > 0
+  const maxTime = options.maxTime !== undefined && Number.isFinite(options.maxTime) && options.maxTime > 0
     ? Math.min(MAX_RECORD_TIME, options.maxTime) : MAX_RECORD_TIME;
-  const run: FlightRecord = { id: nextId++, mode, config: saved, samples: [{ ...initial }],
+  const run = { id: nextId++, mode, config: saved, samples: [{ ...initial }],
     events: [{ time: 0, kind: 'launch', label: mode === 'rocket' ? 'Ignition' : 'Launch' }], duration: 0,
-    outcome: 'limit', maxHeight: initial.y, minX: initial.x, maxX: initial.x, launchX: initial.x };
-  const guidance = mode === 'rocket' ? RocketPhysics.buildGuidance(saved) : null;
+    outcome: 'limit', maxHeight: initial.y, minX: initial.x, maxX: initial.x, launchX: initial.x } as FlightRecord;
+  const guidance = mode === 'rocket' ? RocketPhysics.buildGuidance(saved) : undefined;
   let state = structuredClone(initial), sampleInterval = 0.1, sampleAt = sampleInterval;
   let deadline = performance.now() + 8, classifiedAt: number | null = null;
   let classification = '';
@@ -126,7 +141,8 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
     run.maxHeight = Math.max(run.maxHeight, state.y, state.apexHeight ?? 0);
     run.minX = Math.min(run.minX, state.x); run.maxX = Math.max(run.maxX, state.x);
     if (mode === 'rocket' && state.burnoutTime != null && before.burnoutTime == null) {
-      addEvent(state.burnoutTime, 'burnout', state.cutoffReason === 'orbit' ? 'Orbit insertion · engine cutoff' : 'Engine cutoff');
+      addEvent(state.burnoutTime, 'burnout', state.cutoffReason === 'orbit' ? 'Orbit insertion · engine cutoff'
+        : state.cutoffReason === 'planned' ? 'Planned engine cutoff' : 'Engine cutoff · fuel empty');
       recordEventState(before, state.burnoutTime, { engineOn: false, mProp: state.mProp, mass: state.mass,
         thrustMagnitude: 0, mdot: 0, burnoutTime: state.burnoutTime, burnoutSpeed: state.burnoutSpeed,
         cutoffReason: state.cutoffReason });
@@ -198,7 +214,9 @@ export async function recordFlight(mode: FlightRecord['mode'], config: any, init
   return run;
 }
 
-function sampleOrbit(run: FlightRecord, time: number, guidance = RocketPhysics.buildGuidance(run.config)) {
+function sampleOrbit(run: FlightRecord, time: number, guidance?: Guidance) {
+  if (run.mode !== 'rocket') throw new Error('Only rocket flights have recorded orbits.');
+  guidance ??= RocketPhysics.buildGuidance(run.config);
   const state = sampleOrbitalCoast(run.orbit!, time), initial = run.orbit!.initial;
   Object.assign(state, { engineOn: false, thrustMagnitude: 0, mdot: 0, Isp: 0, flowRegime: 'off',
     gravityImpulseX: initial.gravityImpulseX + state.wvx - initial.wvx,
@@ -254,7 +272,7 @@ function resamplePhysics(run: FlightRecord, start: any, time: number): any | nul
   if ((run.mode !== 'cannon' && run.mode !== 'rocket') ||
       !run.config || !Number.isFinite(run.config.gravity) ||
       !Number.isFinite(start?.time) || start.time > time) return null;
-  const guidance = run.mode === 'rocket' ? RocketPhysics.buildGuidance(run.config) : null;
+  const guidance = run.mode === 'rocket' ? RocketPhysics.buildGuidance(run.config) : undefined;
   const advance = (state: any, duration: number) => run.mode === 'rocket'
     ? RocketPhysics.stepRocket(state, duration, run.config.gravity, guidance)
     : Physics.stepProjectile(state, duration, run.config.gravity);
@@ -317,7 +335,10 @@ export function describeChanges(a: FlightRecord, b: FlightRecord): string {
     propellantId: 'propellant', Pc_bar: 'chamber pressure', throatDia_mm: 'throat', epsilon: 'nozzle',
     MR: 'mixture', etaC: 'combustion efficiency', etaN: 'nozzle efficiency', guidanceMode: 'guidance',
     pitchEnd: 'pitch angle', pitchT1: 'pitch start', pitchT2: 'pitch finish', progradeVmin: 'prograde threshold',
+    cutoffTime: 'engine cutoff time',
     orbitAltitudeKm: 'target orbit altitude' };
-  const changed = Object.entries(names).filter(([key]) => a.config[key] !== b.config[key]).map(([, name]) => name);
+  const changed = Object.entries(names).filter(([key]) =>
+    (a.config as LaunchSettings)[key as keyof LaunchSettings] !== (b.config as LaunchSettings)[key as keyof LaunchSettings]
+  ).map(([, name]) => name);
   return changed.length ? `Changed: ${changed.join(', ')}` : 'Same settings — repeat experiment';
 }

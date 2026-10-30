@@ -3,7 +3,7 @@ export { formatTime } from './number-format.ts';
 import './flight-deck.css';
 import { compatibleRuns, continueOrbit, describeChanges, type FlightRecord } from './flight.ts';
 import { PlaybackClock } from './playback.ts';
-import { orbitAttemptFeedback } from './orbit-feedback.ts';
+import { orbitAttemptFeedback, steeringAttemptFeedback } from './orbit-feedback.ts';
 
 const reducedMotionQuery = typeof matchMedia === 'function'
   ? matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -175,6 +175,12 @@ export class FlightDeck {
   showResult() {
     if (!this.run) return;
     const run = this.run, end = run.samples[run.samples.length - 1];
+    const debrief = document.querySelector<HTMLElement>('#steering-debrief');
+    if (run.mode === 'rocket' && debrief) {
+      const advice = steeringAttemptFeedback(run);
+      debrief.hidden = !advice;
+      debrief.querySelector('p')!.textContent = advice ?? '';
+    }
     const details = this.escapeResult.querySelector<HTMLDetailsElement>('.orbit-details')!;
     details.hidden = true; details.open = false;
     this.escapeResult.querySelector<HTMLButtonElement>('.result-inspect')!.hidden = true;
@@ -186,7 +192,7 @@ export class FlightDeck {
       this.escapeResult.querySelector('button')!.setAttribute('aria-label', 'Dismiss escape message');
       this.escapeResult.querySelector<HTMLButtonElement>('.orbit-continue')!.hidden = true;
       const name = run.config.environment?.name;
-      const world = name && !run.config.environment.interpolated ? name[0].toUpperCase() + name.slice(1) : 'this world';
+      const world = name && !run.config.environment?.interpolated ? name[0].toUpperCase() + name.slice(1) : 'this world';
       const text = `This ${run.mode === 'cannon' ? 'cannonball' : 'rocket'} is ${formatNumber(end.y / 1000)} km above ${world} and still heading away. It won’t land again in this simulation, so we’ve paused here. Replay the journey or explore with Manual zoom.`;
       this.clock.paused = true;
       this.escapeResult.querySelector('p')!.textContent = text; this.escapeResult.hidden = false;

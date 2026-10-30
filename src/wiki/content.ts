@@ -1,3 +1,4 @@
+import { SCIENCE_ARTICLES } from './science-content.ts';
 export type Level = 0 | 1 | 2;
 export interface EquationStep {
   heading?: string;
@@ -21,6 +22,7 @@ export interface Reading {
 export interface Article {
   id: string; title: string; group: string; kind: string; description: string;
   art?: string;
+  lab?:'escape'|'lagrange'|'telescope';
   /** How to say a name that is often guessed wrongly. */
   say?: string;
   stats: [string, string][];
@@ -506,6 +508,7 @@ export const ARTICLES: Article[] = [
       ['NASA · Isentropic flow and the area–Mach relationship','https://www.grc.nasa.gov/www/k-12/airplane/isentrop.html'],
     ],
   },
+  ...SCIENCE_ARTICLES,
 ];
 
 export const MOON_FAMILIES = [

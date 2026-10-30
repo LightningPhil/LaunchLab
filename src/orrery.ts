@@ -8,6 +8,8 @@ import { PlanetSurface, haloTexture, ringTexture } from './orrery-textures.ts';
 import { TouchPan, panOrthographic } from './orrery-navigation.ts';
 import { radialDirection, radialLabel, labelLeader, labelsFarToNear, labelInView, foregroundBodies, labelMask, foregroundBodyAt, visibleLeaderSegments, type LabelDirection, type LabelBody } from './orrery-labels.ts';
 import { COMPACT_LAYOUT_QUERY } from './display-layout.ts';
+import { LAGRANGE_SYSTEMS, lagrangePoints, massFraction, type LagrangeSystem, type LagrangeName } from './lagrange-model.ts';
+import { orreryLagrangePoints } from './orrery-lagrange.ts';
 
 const ALL_WORLDS=worldsFor(true);
 const inspectOptions=(expanded:boolean)=>`<option value="">Choose a world…</option>${WORLDS.map(w=>
@@ -54,7 +56,9 @@ export function installOrrery(onOpen:()=>void) {
   // Stable illumination: neither brightness nor colour depends on solar distance.
   scene.add(new THREE.AmbientLight(0xffffff,2));
   const studio=new THREE.DirectionalLight(0xe8f2ff,1.05);studio.position.set(-40,60,80);camera.add(studio);
-  const controls=new TrackballControls(camera,renderer.domElement);controls.rotateSpeed=2.6;controls.zoomSpeed=1.15;controls.noPan=true;controls.staticMoving=true;controls.minZoom=.35;controls.maxZoom=45;
+  // Physical moon-pair separations need much more magnification than the
+  // illustrated lanes. Fit points and manual zoom share this range.
+  const controls=new TrackballControls(camera,renderer.domElement);controls.rotateSpeed=2.6;controls.zoomSpeed=1.15;controls.noPan=true;controls.staticMoving=true;controls.minZoom=.35;controls.maxZoom=200000;
   // CAD-style pan: a point in the scene follows the pointer pixel for pixel,
   // independent of zoom, viewport shape, camera roll or distance to the target.
   let pan:{pointerId:number;x:number;y:number}|undefined;
@@ -115,6 +119,15 @@ export function installOrrery(onOpen:()=>void) {
   const labelCanvas=$<HTMLCanvasElement>('.orrery-leaders'), ink=labelCanvas.getContext('2d')!;
   const slider=$<HTMLInputElement>('#orrery-scale'),labelToggle=$<HTMLInputElement>('#orrery-label-toggle'),orbitToggle=$<HTMLInputElement>('#orrery-orbit-toggle');
   const catalogueToggle=$<HTMLInputElement>('#orrery-catalogue-toggle');
+  const lagrangeControl=document.createElement('label');
+  lagrangeControl.title='Show the five equilibrium points for a pair of worlds, using an ideal circular three-body model.';
+  lagrangeControl.innerHTML='<input id="orrery-lagrange-toggle" type="checkbox" aria-controls="orrery-lagrange-tools"> Lagrange points';
+  $('.orrery-view-tools').append(lagrangeControl);
+  const pointTools=document.createElement('div');pointTools.id='orrery-lagrange-tools';pointTools.className='orrery-lagrange-tools';pointTools.hidden=true;
+  pointTools.innerHTML=`<label>System<select aria-label="Lagrange point system"><option value="all">All launch worlds</option>${LAGRANGE_SYSTEMS.map(s=>`<option value="${s.id}" ${s.id==='sun-earth'?'selected':''}>${s.label}</option>`).join('')}</select></label><button type="button" data-fit-points>Fit points</button><span>◇ L1–L3 unstable · L4/L5 depend on mass ratio</span>`;
+  $('.orrery-view-tools').append(pointTools);
+  const lagrangeToggle=$<HTMLInputElement>('#orrery-lagrange-toggle'),pointSystem=$<HTMLSelectElement>('[aria-label="Lagrange point system"]');
+  let lagrangeVisible=false,chosenSystem='sun-earth';
   const dateInput=$<HTMLInputElement>('#orrery-date'),play=$<HTMLButtonElement>('#orrery-play'),status=$<HTMLElement>('#orrery-status');
   const compactLayout=matchMedia(COMPACT_LAYOUT_QUERY),adjustments=$<HTMLDetailsElement>('.orrery-adjustment-panel');
   const syncAdjustments=()=>{adjustments.open=!compactLayout.matches;};
@@ -130,7 +143,8 @@ export function installOrrery(onOpen:()=>void) {
   const orbitAngles=circlePoints(pointsPerOrbit);
   const sphereGeometry=new THREE.SphereGeometry(.5,96,64);
   const smallGeometry=new THREE.SphereGeometry(.5,24,16);
-  type Target={id:string;name:string;colour:string;position:THREE.Vector3;radius:number;bodyRadius:number;parent?:string;label:HTMLButtonElement;enabled:boolean;labelOccluders:LabelBody[]};
+  type Target={id:string;name:string;colour:string;position:THREE.Vector3;radius:number;bodyRadius:number;parent?:string;label:HTMLButtonElement;enabled:boolean;labelOccluders:LabelBody[];
+    lagrange?:{system:LagrangeSystem;point:LagrangeName;stable:boolean;distanceKm:number}};
   type Planet={world:World;root:THREE.Group;tilt:THREE.Group;mesh:THREE.Mesh;surface:PlanetSurface;orbit?:THREE.LineLoop;target:Target;real:[number,number,number];halo?:THREE.Sprite};
   const targets:Target[]=[],planets:Planet[]=[];
   function makeTarget(id:string,name:string,colour:string,parent?:string):Target {
@@ -179,6 +193,22 @@ export function installOrrery(onOpen:()=>void) {
     const points=new THREE.Points(geo,new THREE.PointsMaterial({size:index?1.15:1.45,sizeAttenuation:false,vertexColors:true,transparent:true,opacity:.85,depthWrite:false}));points.frustumCulled=false;scene.add(points);
     return {belt,data,array,points,target:makeTarget(belt.id,belt.name,belt.colour,'sun')};
   });
+  const pointTargets=LAGRANGE_SYSTEMS.flatMap(system=>lagrangePoints(massFraction(system)).map(point=>{
+    const target=makeTarget(`point-${system.id}-${point.name}`,point.name,point.stable?'#8de0bd':'#ecc684',
+      point.name==='L1'||point.name==='L2'?system.secondary:system.primary);
+    target.lagrange={system,point:point.name,stable:point.stable,distanceKm:0};
+    target.enabled=false;target.label.hidden=true;target.label.classList.add('orrery-point-label');
+    target.label.setAttribute('aria-label',`${system.label} ${point.name}, ${point.stable?'linearly stable':'unstable'} in the circular model`);
+    return target;
+  }));
+  function syncPointTargets(){
+    for(const target of pointTargets){
+      const p=target.lagrange!;
+      target.enabled=lagrangeVisible&&(chosenSystem==='all'||chosenSystem===p.system.id);
+      target.name=chosenSystem==='all'?`${p.system.secondary[0].toUpperCase()+p.system.secondary.slice(1)} ${p.point}`:p.point;
+      target.label.textContent=target.name;if(!target.enabled)target.label.hidden=true;
+    }
+  }
   // A restrained, fixed star field; its shell always lies beyond the model.
   const random=seeded(744),stars=new Float32Array(1100*3);
   for(let i=0;i<1100;i++){const z=random()*2-1,a=random()*TAU,r=Math.sqrt(1-z*z);stars[i*3]=r*Math.cos(a)*600;stars[i*3+1]=z*600;stars[i*3+2]=r*Math.sin(a)*600;}
@@ -190,6 +220,18 @@ export function installOrrery(onOpen:()=>void) {
     targets.forEach(t=>{t.label.classList.toggle('selected',t.id===id);t.label.setAttribute('aria-pressed',String(t.id===id));});
     planets.forEach(p=>{if(p.orbit)(p.orbit.material as THREE.LineBasicMaterial).opacity=id===p.world.id?.65:.23;});
     if(!id)return;
+    const pointTarget=pointTargets.find(t=>t.id===id),point=pointTarget?.lagrange;
+    if(point){
+      $('#orrery-kind').textContent=`${point.system.label.toUpperCase()} · LAGRANGE POINT`;
+      $('.orrery-info h2').textContent=point.point;
+      $('.orrery-info dl').innerHTML=`<div><dt>From companion</dt><dd id="orrery-point-distance">${point.distanceKm.toLocaleString(undefined,{maximumFractionDigits:0})} km</dd></div><div><dt>Stability</dt><dd>${point.stable?'Linearly stable':'Unstable'}</dd></div>`;
+      $('.orrery-info-note').textContent=`Equilibrium in a frame rotating with both worlds. ${point.stable?'Small disturbances can remain nearby; this is not a guarantee for large kicks or the real multi-body system.':'A small disturbance can grow; spacecraft need station keeping.'} Circular model scaled to the current separation. Even spacing enlarges close L1/L2 offsets for visibility.`;
+      $('.orrery-focus').hidden=false;$('.orrery-focus').textContent='Explore Lagrange points';return;
+    }
+    if(lagrangeVisible&&chosenSystem!=='all'){
+      const pair=LAGRANGE_SYSTEMS.find(s=>s.secondary===id)||(id==='sun'?LAGRANGE_SYSTEMS.find(s=>s.id==='sun-earth'):undefined);
+      if(pair){chosenSystem=pair.id;pointSystem.value=chosenSystem;syncPointTargets();renderedDate=NaN;}
+    }
     const world=ALL_WORLDS.find(w=>w.id===id),belt=BELTS.find(b=>b.id===id);
     const focusButton=$<HTMLButtonElement>('.orrery-focus');focusButton.hidden=!world;
     focusButton.textContent=world&&!world.satellite&&moonsFor(expanded).some(m=>m.satellite!.parent===id)?'View moon system':'View close-up';
@@ -214,6 +256,8 @@ export function installOrrery(onOpen:()=>void) {
     if(!dateDirty&&document.activeElement!==dateInput)dateInput.value=localInput(simulation);
     play.textContent=running?'Ⅱ Pause':'▶ Play';play.setAttribute('aria-label',running?'Pause orrery':'Play orrery');
     const distance=$<HTMLElement>('#orrery-distance');if(distance){const planet=planets.find(p=>p.world.id===selected);distance.textContent=!planet?'':planet.world.id==='sun'?'Centre':`${Math.hypot(...positionAt(planet.world,simulation)).toFixed(3)} AU`;}
+    const point=pointTargets.find(t=>t.id===selected)?.lagrange;
+    if(point)$('#orrery-point-distance').textContent=`${point.distanceKm.toLocaleString(undefined,{maximumFractionDigits:0})} km`;
   }
   function updateStatus(message?:string){status.textContent=message??`${running?'Running':'Paused'}${direction<0?' backwards':''} · ${$<HTMLSelectElement>('#orrery-speed').selectedOptions[0].text}`;}
   function updateOrbits(){
@@ -253,6 +297,14 @@ export function installOrrery(onOpen:()=>void) {
       const r=mix((belt.inner+belt.outer)/2,radii[belt.id],amount),angle=belt.id==='kuiper'?2.35:.55;
       target.position.set(Math.cos(angle)*r,0,-Math.sin(angle)*r);target.radius=0;
     }
+    if(lagrangeVisible)for(const system of LAGRANGE_SYSTEMS){
+      if(chosenSystem!=='all'&&chosenSystem!==system.id)continue;
+      const points=orreryLagrangePoints(system,simulation,amount,expanded);
+      for(const point of points){
+        const target=pointTargets.find(t=>t.lagrange!.system.id===system.id&&t.lagrange!.point===point.name)!;
+        target.position.set(...point.position);target.lagrange!.distanceKm=point.companionDistanceKm;
+      }
+    }
     updateOrbits();
     if(following){
       const focus=planets.find(p=>p.world.id===following)!;
@@ -261,7 +313,8 @@ export function installOrrery(onOpen:()=>void) {
   }
   const labelDirections=new Map<string,{heading:LabelDirection;dx:number;dy:number}>();
   function updateLabels(seconds:number){
-    ink.clearRect(0,0,width,height);if(!labelsVisible)return;
+    ink.clearRect(0,0,width,height);
+    if(!labelsVisible&&!lagrangeVisible)return;
     const pxPerUnit=height/(camera.top-camera.bottom)*camera.zoom;
     const projected=targets.filter(target=>target.enabled).map(target=>{const p=target.position.clone().project(camera);return {id:target.id,target,x:(p.x+1)*width/2,y:(1-p.y)*height/2,z:p.z,r:target.radius*pxPerUnit};});
     const byId=new Map(projected.map(p=>[p.id,p]));
@@ -269,6 +322,7 @@ export function installOrrery(onOpen:()=>void) {
     ink.font="11px 'Segoe UI',system-ui,sans-serif";
     for(const [layer,p] of labelsFarToNear(projected).entries()){
       const label=p.target.label;
+      if(!labelsVisible&&!p.target.lagrange)continue;
       label.style.zIndex=String(layer+1);
       if(p.z< -1||p.z>1){label.hidden=true;continue;}
       // Extra names appear as their system becomes readable. The selected body
@@ -286,28 +340,32 @@ export function installOrrery(onOpen:()=>void) {
       const rect=radialLabel(p,parent,w,h,heading);
       const foreground=foregroundBodies(p,solids);
       p.target.labelOccluders=foreground;
-      label.hidden=!labelInView(rect,width,height);
+      label.hidden=!labelsVisible||!labelInView(rect,width,height);
       label.style.maskImage=labelMask(rect,foreground);
       label.style.width=`${w}px`;label.style.transform=`translate(${rect.x.toFixed(2)}px,${rect.y.toFixed(2)}px)`;
-      if(label.hidden)continue;
       const leader=labelLeader(p,rect);
       ink.strokeStyle=p.id===selected?'#eac58aaa':'#7e91a44a';ink.lineWidth=1;
-      if(leader){
+      if(leader&&!label.hidden){
         ink.beginPath();
         for(const segment of visibleLeaderSegments(leader,foreground)){ink.moveTo(segment.start.x,segment.start.y);ink.lineTo(segment.end.x,segment.end.y);}
         ink.stroke();
       }
-      if(p.r<2){
+      if(p.r<2&&(p.target.lagrange||!label.hidden)){
         ink.save();
-        for(const solid of foreground.filter(s=>Math.hypot(s.x-p.x,s.y-p.y)<s.r+1.5)){
+        for(const solid of foreground.filter(s=>Math.hypot(s.x-p.x,s.y-p.y)<s.r+(p.target.lagrange?3.5:1.5))){
           ink.beginPath();ink.rect(0,0,width,height);ink.arc(solid.x,solid.y,solid.r,0,TAU);ink.clip('evenodd');
         }
-        ink.fillStyle=p.target.colour;ink.beginPath();ink.arc(p.x,p.y,1.5,0,TAU);ink.fill();ink.restore();
+        ink.fillStyle=p.target.colour;ink.beginPath();
+        if(p.target.lagrange){ink.moveTo(p.x,p.y-3.5);ink.lineTo(p.x+3.5,p.y);ink.lineTo(p.x,p.y+3.5);ink.lineTo(p.x-3.5,p.y);ink.closePath();}
+        else ink.arc(p.x,p.y,1.5,0,TAU);
+        ink.fill();ink.restore();
       }
     }
   }
   function resize(){
     width=Math.max(1,mount.clientWidth);height=Math.max(1,mount.clientHeight);
+    const tools=$('.orrery-view-tools');
+    stage.style.setProperty('--orrery-info-top',`${tools.offsetTop+tools.offsetHeight+10}px`);
     renderer.setSize(width,height,false);const extent=outerRadius(amount,expanded)*1.13,aspect=width/height;
     const halfHeight=extent/Math.min(1,aspect);camera.left=-halfHeight*aspect;camera.right=halfHeight*aspect;camera.top=halfHeight;camera.bottom=-halfHeight;camera.updateProjectionMatrix();
     const dpr=Math.min(devicePixelRatio,2);renderer.setPixelRatio(dpr);labelCanvas.width=Math.round(width*dpr);labelCanvas.height=Math.round(height*dpr);ink.setTransform(dpr,0,0,dpr,0,0);controls.handleResize();
@@ -347,7 +405,7 @@ export function installOrrery(onOpen:()=>void) {
   function open(){
     if(dialog.open)return;dialog.showModal();document.body.classList.add('orrery-open');onOpen();
     if(firstOpen){simulation=Date.now();firstOpen=false;fit();}else resize();
-    observer.observe(mount);last=undefined;updateUI();updateScene();if(!frame)frame=requestAnimationFrame(draw);
+    observer.observe(mount);observer.observe($('.orrery-view-tools'));last=undefined;updateUI();updateScene();if(!frame)frame=requestAnimationFrame(draw);
   }
   function close(){endPan();touchPan.reset();pointerStart=undefined;dialog.close();document.body.classList.remove('orrery-open');cancelAnimationFrame(frame);frame=0;last=undefined;observer.disconnect();for(const p of planets)p.surface.releaseDetails();opener.focus({preventScroll:true});}
   opener.onclick=open;$('.orrery-close').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
@@ -364,13 +422,34 @@ export function installOrrery(onOpen:()=>void) {
     const followed=ALL_WORLDS.find(w=>w.id===following);
     if(!expanded&&isExtraWorld(selected))selected=previous?.satellite?.parent??previous?.region??'asteroids';
     if(!expanded&&isExtraWorld(following))following=followed?.satellite?.parent??'';
-    targets.forEach(target=>{target.enabled=expanded||!isExtraWorld(target.id);if(!target.enabled)target.label.hidden=true;});
+    targets.filter(t=>!t.lagrange).forEach(target=>{target.enabled=expanded||!isExtraWorld(target.id);if(!target.enabled)target.label.hidden=true;});
     $<HTMLSelectElement>('#orrery-inspect').innerHTML=inspectOptions(expanded);
     planets.forEach(p=>{if(!p.target.enabled)p.surface.releaseDetails();});
     renderedDate=NaN;orbitScale=NaN;labelDirections.clear();
     resize();updateScene();inspect(selected);
     if(following)focusWorld(following);
     updateStatus(`${expanded?`${ALL_MOONS.length} moons · ${ASTEROIDS.length} asteroids · ${KUIPER_BODIES.length} Kuiper belt bodies`:'Main worlds'} · ${running?'Running':'Paused'}`);
+  };
+  lagrangeToggle.onchange=()=>{
+    lagrangeVisible=lagrangeToggle.checked;pointTools.hidden=!lagrangeVisible;
+    if(!lagrangeVisible&&pointTargets.some(t=>t.id===selected))inspect('');
+    if(lagrangeVisible&&selected){const pair=LAGRANGE_SYSTEMS.find(s=>s.secondary===selected);if(pair){chosenSystem=pair.id;pointSystem.value=chosenSystem;}}
+    syncPointTargets();renderedDate=NaN;updateScene();
+    updateStatus(lagrangeVisible?'Lagrange points · ideal circular model · choose a pair or all launch worlds':undefined);
+  };
+  pointSystem.onchange=()=>{
+    chosenSystem=pointSystem.value;if(pointTargets.some(t=>t.id===selected))inspect('');
+    syncPointTargets();renderedDate=NaN;labelDirections.clear();updateScene();
+  };
+  $('[data-fit-points]').onclick=()=>{
+    updateScene();
+    const system=LAGRANGE_SYSTEMS.find(s=>s.id===chosenSystem);
+    const centre=system?planets.find(p=>p.world.id===system.primary)!.root.position.clone():new THREE.Vector3();
+    const offset=camera.position.clone().sub(controls.target);
+    camera.position.copy(centre).add(offset);controls.target.copy(centre);following=system&&system.primary!=='sun'?system.primary:'';
+    const radius=Math.max(...pointTargets.filter(t=>t.enabled).map(t=>t.position.distanceTo(centre)),.01);
+    const span=Math.min(camera.top-camera.bottom,camera.right-camera.left);
+    camera.zoom=THREE.MathUtils.clamp(span/(radius*2.5),controls.minZoom,controls.maxZoom);camera.updateProjectionMatrix();controls.update();
   };
   $<HTMLSelectElement>('#orrery-inspect').onchange=event=>inspect((event.target as HTMLSelectElement).value);
   $('.orrery-info-close').onclick=()=>inspect('');
@@ -386,6 +465,7 @@ export function installOrrery(onOpen:()=>void) {
     camera.updateProjectionMatrix();controls.update();
   }
   $('.orrery-focus').onclick=()=>{
+    if(pointTargets.some(t=>t.id===selected)){close();location.hash='#wiki/lagrange-points/1';return;}
     focusWorld(selected);
     // Let the requested close-up use the phone's narrow stage. Selecting a
     // label or another Explore entry brings the information card back.
@@ -414,7 +494,9 @@ export function installOrrery(onOpen:()=>void) {
     if(!pointerStart||pointerStart.id!==event.pointerId||(event.pointerType==='touch'&&touchPan.suppressTap)||Math.hypot(event.clientX-pointerStart.x,event.clientY-pointerStart.y)>5){pointerStart=undefined;return;}pointerStart=undefined;
     const rect=renderer.domElement.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top,pxPerUnit=height/(camera.top-camera.bottom)*camera.zoom;
     const candidates=planets.filter(p=>p.target.enabled).map(p=>{const v=p.root.position.clone().project(camera);return {id:p.world.id,z:v.z,d:Math.hypot((v.x+1)*width/2-x,(1-v.y)*height/2-y),r:Math.max(9,p.target.radius*pxPerUnit)};}).filter(p=>p.z>=-1&&p.z<=1&&p.d<=p.r).sort((a,b)=>a.z-b.z);
-    if(candidates.length)inspect(candidates[0].id);
+    const pointCandidates=pointTargets.filter(t=>t.enabled).map(t=>{const v=t.position.clone().project(camera);return {id:t.id,z:v.z,d:Math.hypot((v.x+1)*width/2-x,(1-v.y)*height/2-y),r:9};}).filter(p=>p.z>=-1&&p.z<=1&&p.d<=p.r);
+    const nearest=[...candidates,...pointCandidates].sort((a,b)=>a.z-b.z)[0];
+    if(nearest)inspect(nearest.id);
   });
   stage.addEventListener('keydown',event=>{if(event.target===renderer.domElement&&event.key==='Home')fit();});
   renderer.domElement.tabIndex=0;

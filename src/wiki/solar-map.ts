@@ -56,6 +56,7 @@ export function mapDestination(body: MapBody) {
 }
 function leader(body: MapBody, layout: MapLayout) {
   const [x,y] = body[layout], b = labelBox(body, layout);
+  if (!b) return '';
   const cx = b.x+b.width/2, cy = b.y+b.height/2, dx = cx-x, dy = cy-y;
   const length = Math.hypot(dx,dy), radius = body.size * .4;
   const edge = Math.min(b.width/2/Math.max(Math.abs(dx),.01), b.height/2/Math.max(Math.abs(dy),.01));

@@ -6,7 +6,7 @@ const viewports = [[320, 220], [360, 280], [390, 320], [768, 220], [1100, 350], 
 
 // Test the painted barrel corners (including its muzzle band) rather than the
 // helper's bounding formula, using the renderer's actual ground placement.
-function assertLauncherFits(width, height, ppm, length, angle, topInset = 0) {
+function assertLauncherFits(width: number, height: number, ppm: number, length: number, angle: number, topInset: number = 0) {
   const radians = angle * Math.PI / 180;
   const ground = height - Math.max(12, 70 * ppm / 80);
   for (const [along, across] of [[-.45, -.22], [-.45, .22], [length, -.20], [length, .20]]) {

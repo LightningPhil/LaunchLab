@@ -12,7 +12,7 @@ export function chooseIdleLook(random=Math.random):IdleLook {
   return {sequence:Math.min(3,Math.floor(random()*4)),side:random()<.5?-1:1,
     duration:7+random()*4,opticsAt:random()<.38?5+random()*3:Infinity};
 }
-interface ObserverPose { type:string;state?:string;stateTimer?:number;reducedMotion?:boolean;reaction?:string;watchAim?:WatchAim;idleLook?:IdleLook }
+interface ObserverPose { type:string;state?:string;stateTimer?:number;reducedMotion?:boolean;reaction?:string|null;watchAim?:WatchAim;idleLook?:IdleLook }
 /** A bare-eyed glance uses the same facing rig, without raising any equipment. */
 export function gazeAim(pose:ObserverPose):WatchAim|undefined {
   if(pose.state==='watching')return pose.watchAim;

@@ -1,3 +1,4 @@
+import { keysOf } from './helpers.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CHARGES, MATERIALS, CANNON_SCALES, simulateCannon, sampleCannon, timeAtTravel,
@@ -5,7 +6,7 @@ import { CHARGES, MATERIALS, CANNON_SCALES, simulateCannon, sampleCannon, timeAt
 import { getArticle } from '../src/wiki/content.ts';
 
 test('the classroom model balances released energy with gas, motion and losses',()=>{
-  for(const charge of Object.keys(CHARGES)) for(const material of Object.keys(MATERIALS)) {
+  for(const charge of keysOf(CHARGES)) for(const material of keysOf(MATERIALS)) {
     const run=simulateCannon({charge,material});
     let x=0,v=0;
     for(const p of run.samples) {
@@ -30,14 +31,14 @@ test('the classroom model balances released energy with gas, motion and losses',
 });
 
 test('material and charge comparisons follow the intended physical relationships',()=>{
-  for(const charge of Object.keys(CHARGES)) {
-    const [stone,iron,lead]=['stone','iron','lead'].map(material=>simulateCannon({charge,material}));
+  for(const charge of keysOf(CHARGES)) {
+    const [stone,iron,lead]=(['stone','iron','lead'] as const).map(material=>simulateCannon({charge,material}));
     assert.ok(stone.exit.speed>iron.exit.speed&&iron.exit.speed>lead.exit.speed);
     assert.ok(stone.exit.time<iron.exit.time&&iron.exit.time<lead.exit.time);
     assert.ok(stone.peak.pressure<iron.peak.pressure,'early movement changes the available gas volume');
   }
-  for(const material of Object.keys(MATERIALS)) {
-    const [small,medium,large]=['small','medium','large'].map(charge=>simulateCannon({charge,material}));
+  for(const material of keysOf(MATERIALS)) {
+    const [small,medium,large]=(['small','medium','large'] as const).map(charge=>simulateCannon({charge,material}));
     assert.ok(small.exit.speed<medium.exit.speed&&medium.exit.speed<large.exit.speed);
     assert.ok(small.peak.pressure<medium.peak.pressure&&medium.peak.pressure<large.peak.pressure);
   }
@@ -45,11 +46,11 @@ test('material and charge comparisons follow the intended physical relationships
 });
 
 test('integration converges and scrubbing stays on the same recorded solution',()=>{
-  for(const material of Object.keys(MATERIALS)) {
-    const options={charge:'large',material},normal=simulateCannon(options),fine=simulateCannon(options,.0005);
+  for(const material of keysOf(MATERIALS)) {
+    const options={charge:'large' as const,material},normal=simulateCannon(options),fine=simulateCannon(options,.0005);
     assert.ok(Math.abs(normal.exit.speed-fine.exit.speed)<1e-5);
     assert.ok(Math.abs(normal.exit.time-fine.exit.time)<1e-5);
-    for(const x of [0,.1,.25,.5,.9,1]) {
+    for(const x of [0,.1,.25,.5,.9,1] as const) {
       const p=sampleCannon(normal,timeAtTravel(normal,x));
       assert.ok(Math.abs(p.travel-x)<1e-8,'travel-axis selection returns the matching time');
     }
@@ -58,7 +59,7 @@ test('integration converges and scrubbing stays on the same recorded solution',(
     assert.equal(sampleCannon(normal,1e9).time,normal.endTime);
     assert.deepEqual(options,{charge:'large',material},'integration never mutates the controls');
   }
-  for(const step of [NaN,0,-1,1]) assert.throws(()=>simulateCannon({charge:'small',material:'iron'},step));
+  for(const step of [NaN,0,-1,1] as const) assert.throws(()=>simulateCannon({charge:'small',material:'iron'},step));
 });
 
 test('exhibit controls follow a finite sequence and replay does not change the experiment',()=>{
@@ -79,6 +80,7 @@ test('exhibit controls follow a finite sequence and replay does not change the e
 
 test('all three cannon readings explain historical propellant and the model boundary',()=>{
   const article=getArticle('cannons');
+  assert.ok(article);
   assert.ok(article.stats.some(([,value])=>value.includes('1200s')));
   assert.ok(article.sources.some(([label])=>label.includes('Royal Armouries')));
   assert.ok(article.sources.some(([label])=>label.includes('HARP')));

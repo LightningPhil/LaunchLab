@@ -20,7 +20,9 @@ test('every authored wiki equation renders valid LaTeX with accessible MathML', 
 });
 
 test('equations can sit between paragraphs; eff and exit are complete subscripts', () => {
-  const html = renderReading(getArticle('rockets').levels[2]);
+  const article = getArticle('rockets');
+  assert.ok(article);
+  const html = renderReading(article.levels[2]);
   assert.ok(html.indexOf('THE IDEAL ROCKET EQUATION') < html.indexOf('invented classroom quantities'));
   assert.match(html, /<msub><mi>v<\/mi><mrow><mi mathvariant="normal">e<\/mi><mi mathvariant="normal">f<\/mi><mi mathvariant="normal">f<\/mi><\/mrow><\/msub>/);
   assert.match(html, /<details class="atlas-equation-details">/);
