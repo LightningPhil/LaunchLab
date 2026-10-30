@@ -21,7 +21,7 @@ export interface CrewPose {
   state?: string;
   stateTimer?: number;
   direction?: number;
-  reaction?: CrewReaction;
+  reaction?: CrewReaction | null;
   reducedMotion?: boolean;
   /** Walking speed in metres per second; running is 3.5 times this. */
   speed?: number;
@@ -1016,7 +1016,7 @@ export function drawCrew(ctx: CanvasRenderingContext2D, x: number, footY: number
     wide: scared,
     tilt: state === 'inspecting' ? .32 : gaze ? gaze.yaw ? -clamp(finite(gaze.elevation), -.2, 1.05) : 0 : lookUp ? -.14 : moving ? m.lean * -.4 : pose.business ? .1 : 0,
   };
-  const cues: Cues = { type, state, reaction, startled, seated, t, worker: type === 'worker', golfer: type === 'golfer', aim, gaze, business:pose.business };
+  const cues: Cues = { type, state, reaction:reaction ?? undefined, startled, seated, t, worker: type === 'worker', golfer: type === 'golfer', aim, gaze, business:pose.business };
 
   if (seated) {
     // A stool only arrives during an uneventful coast; it never holds up a launch.

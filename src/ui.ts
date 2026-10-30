@@ -3,12 +3,29 @@ import { Physics } from './physics.ts';
 import { RocketPropellants } from './rocket_propellants.ts';
 import { RocketPhysics } from './rocket_physics.ts';
 import { ENVIRONMENTS, resolveEnvironment } from './environment.ts';
+import { orbitPathFeedback } from './orbit-feedback.ts';
 import { getPlanetFact } from './planet-facts.ts';
 import { installFactExplanations, updateFactLabels } from './fact-dialog.ts';
 import { clampGravity } from './gravity-scale.ts';
 import { getWorldArt } from './world-art.ts';
-import { applyLaunchSettings, CANNON_DEFAULTS, ROCKET_DEFAULTS, setMixtureBounds } from './launch-settings.ts';
+import { applyLaunchSettings, CANNON_DEFAULTS, ROCKET_DEFAULTS, EARTH_ORBIT_EXAMPLE, EARTH_STEERING_PRACTICE, setMixtureBounds } from './launch-settings.ts';
 import { protectTouchRange } from './touch-range.ts';
+import { formatNumber } from './number-format.ts';
+import { requiredElement } from './dom.ts';
+import { guidanceMode, type RocketConfig, type RocketState } from './rocket_physics.ts';
+import type { ProjectileState } from './physics.ts';
+import type { LaunchSettings } from './launch-settings.ts';
+
+interface UICallbacks {
+  onFire: () => void; onClear: () => void;
+  onGravityChange?: (gravity:number) => void; onBarrelChange?: (length:number) => void;
+  onModeChange?: (mode:'cannon'|'rocket') => void;
+  onRocketLaunch?: () => void; onRocketClear?: () => void; onSetupChange?: () => void;
+}
+interface PostFlightSummary {
+  range:number; maxHeight:number; flightTime:number; burnTime:number|null;
+  dvTsiolkovsky:number; dvActual:number|null; burnoutSpeed?:number|null;
+}
 
 /**
  * ============================================================================
@@ -28,67 +45,68 @@ import { protectTouchRange } from './touch-range.ts';
  */
 
 // ── DOM references (populated in init) ─────────────────────────────────────
-var sliderAngle, sliderMass, sliderForce, sliderBarrel;
-var valAngle, valMass, valForce, valBarrel;
-var btnFire, btnClear;
-var planetButtons;
-var readVelocity, readHeight, readDistance;
-var readKE, readPE, readTME;
-var energyBarKE, energyBarPE;
-var tooltipEl;
-var planetFactButton, planetFactButtonLabel, planetFactDialog, planetFactCard, planetFactArtwork;
+var sliderAngle: HTMLInputElement, sliderMass: HTMLInputElement, sliderForce: HTMLInputElement, sliderBarrel: HTMLInputElement, forceMultiplier: HTMLSelectElement;
+var valAngle: HTMLElement, valMass: HTMLElement, valForce: HTMLElement, valBarrel: HTMLElement;
+var btnFire: HTMLButtonElement, btnClear: HTMLButtonElement;
+var planetButtons: NodeListOf<HTMLButtonElement>;
+var readVelocity: HTMLElement, readHeight: HTMLElement, readDistance: HTMLElement;
+var readKE: HTMLElement, readPE: HTMLElement, readTME: HTMLElement;
+var energyBarKE: HTMLElement, energyBarPE: HTMLElement;
+var tooltipEl: HTMLElement;
+var planetFactButton: HTMLButtonElement, planetFactButtonLabel: HTMLElement, planetFactDialog: HTMLDialogElement, planetFactCard: HTMLElement, planetFactArtwork: HTMLImageElement;
 
 // Selected world's exact surface gravity, including Ganymede's 1.428 m/s².
 var gravityValue = 9.81;
 
 // Mode state
-var currentMode = 'cannon'; // 'cannon' | 'rocket'
-var modeButtons;
-var cannonPanel, rocketPanel;
+var currentMode: 'cannon' | 'rocket' = 'cannon'; // 'cannon' | 'rocket'
+var modeButtons: NodeListOf<HTMLButtonElement>;
+var cannonPanel: HTMLElement, rocketPanel: HTMLElement;
 
-var onFire = null;
-var onClear = null;
-var onGravityChange = null;
-var onBarrelChange = null;
-var onModeChange = null;
+var onFire: UICallbacks["onFire"] | null = null;
+var onClear: UICallbacks["onClear"] | null = null;
+var onGravityChange: UICallbacks["onGravityChange"] | null = null;
+var onBarrelChange: UICallbacks["onBarrelChange"] | null = null;
+var onModeChange: UICallbacks["onModeChange"] | null = null;
 var isFlightActive = false;  // Track flight state for mode toggle guard
-var onRocketLaunch = null;
-var onRocketClear = null;
-var activeTooltipAnchor = null;
+var onRocketLaunch: UICallbacks["onRocketLaunch"] | null = null;
+var onRocketClear: UICallbacks["onRocketClear"] | null = null;
+var activeTooltipAnchor: HTMLElement | null = null;
 
 // ── Rocket DOM references (populated in initRocketPanel) ───────────────────
-var rocketPropSelect, propellantNote;
-var sliderRocketMR, sliderRocketPc, sliderRocketEps, sliderRocketDt;
-var sliderRocketDryMass, sliderRocketPropMass, sliderRocketAngle;
-var sliderRocketEtaC, sliderRocketEtaN;
-var rocketGuidanceSelect;
-var sliderPitchEnd, sliderPitchT1, sliderPitchT2, sliderProgradeVmin;
-var guidancePitchSub, guidanceProgradeSub;
-var efficiencySection, efficiencyArrow;
-var btnLaunch, btnRocketClear;
-var twWarning, fizzleMessage;
+var rocketPropSelect: HTMLSelectElement, propellantNote: HTMLElement;
+var sliderRocketMR: HTMLInputElement, sliderRocketPc: HTMLInputElement, sliderRocketEps: HTMLInputElement, sliderRocketDt: HTMLInputElement;
+var sliderRocketDryMass: HTMLInputElement, sliderRocketPropMass: HTMLInputElement, sliderRocketAngle: HTMLInputElement, propMassMultiplier: HTMLSelectElement;
+var sliderRocketEtaC: HTMLInputElement, sliderRocketEtaN: HTMLInputElement;
+var rocketGuidanceSelect: HTMLSelectElement;
+var sliderPitchEnd: HTMLInputElement, sliderPitchT1: HTMLInputElement, sliderPitchT2: HTMLInputElement, sliderProgradeVmin: HTMLInputElement;
+var guidancePitchSub: HTMLElement, guidanceProgradeSub: HTMLElement;
+var guidanceOrbitSub: HTMLElement, sliderOrbitAltitude: HTMLInputElement, valOrbitAltitude: HTMLElement;
+var efficiencySection: HTMLElement, efficiencyArrow: HTMLElement;
+var btnLaunch: HTMLButtonElement, btnRocketClear: HTMLButtonElement;
+var twWarning: HTMLElement, fizzleMessage: HTMLElement;
 // Rocket value displays
-var valRocketMR, valRocketPc, valRocketEps, valRocketDt;
-var valRocketDryMass, valRocketPropMass, valRocketAngle;
-var valRocketEtaC, valRocketEtaN;
-var valPitchEnd, valPitchT1, valPitchT2, valProgradeVmin;
+var valRocketMR: HTMLElement, valRocketPc: HTMLElement, valRocketEps: HTMLElement, valRocketDt: HTMLElement;
+var valRocketDryMass: HTMLElement, valRocketPropMass: HTMLElement, valRocketAngle: HTMLElement;
+var valRocketEtaC: HTMLElement, valRocketEtaN: HTMLElement;
+var valPitchEnd: HTMLElement, valPitchT1: HTMLElement, valPitchT2: HTMLElement, valProgradeVmin: HTMLElement;
 // Rocket readout elements
-var readRocketThrust, readRocketMdot, readRocketIsp;
-var readRocketTW, readRocketBurn, readRocketDV;
-var readRocketVelocity, readRocketHeight, readRocketRange;
-var readRocketProp, readRocketImpulse;
+var readRocketThrust: HTMLElement, readRocketMdot: HTMLElement, readRocketIsp: HTMLElement;
+var readRocketTW: HTMLElement, readRocketBurn: HTMLElement, readRocketDV: HTMLElement;
+var readRocketVelocity: HTMLElement, readRocketHeight: HTMLElement, readRocketRange: HTMLElement;
+var readRocketProp: HTMLElement, readRocketImpulse: HTMLElement;
 // Live flight extended readouts
-var readRocketLiveThrust, readRocketLiveMass, readRocketLiveIsp, readRocketLiveTW;
+var readRocketLiveThrust: HTMLElement, readRocketLiveMass: HTMLElement, readRocketLiveIsp: HTMLElement, readRocketLiveTW: HTMLElement;
 // Propellant gauge elements
-var propGaugeOx, propGaugeFuel;
+var propGaugeOx: HTMLElement, propGaugeFuel: HTMLElement;
 // Post-flight summary elements
-var postFlightSummary;
-var readPostRange, readPostFlightTime, readPostBurnTime;
-var readPostDvTsiolkovsky, readPostDvActual, readPostGravityLoss;
+var postFlightSummary: HTMLElement;
+var readPostRange: HTMLElement, readPostFlightTime: HTMLElement, readPostBurnTime: HTMLElement;
+var readPostDvTsiolkovsky: HTMLElement, readPostDvActual: HTMLElement, readPostGravityLoss: HTMLElement;
 
 // ── Initialisation ─────────────────────────────────────────────────────────
 
-function init(callbacks) {
+function init(callbacks: UICallbacks) {
   onFire = callbacks.onFire;
   onClear = callbacks.onClear;
   onGravityChange = callbacks.onGravityChange || null;
@@ -96,47 +114,54 @@ function init(callbacks) {
   onModeChange = callbacks.onModeChange || null;
   onRocketLaunch = callbacks.onRocketLaunch || null;
   onRocketClear = callbacks.onRocketClear || null;
+  // Once a flight has ended, the first edit starts a fresh setup. Otherwise
+  // edited labels would describe the old recording when resuming/inspecting it.
+  for (const event of ['input', 'change']) document.querySelector('.controls-scroll')!.addEventListener(event, () => {
+    if (!isFlightActive) callbacks.onSetupChange?.();
+  }, true);
 
   // Mode toggle
-  cannonPanel = document.getElementById('cannon-panel');
-  rocketPanel = document.getElementById('rocket-panel');
-  modeButtons = document.querySelectorAll('.mode-btn');
+  cannonPanel = requiredElement('cannon-panel', 'section');
+  rocketPanel = requiredElement('rocket-panel', 'section');
+  modeButtons = document.querySelectorAll<HTMLButtonElement>('.mode-btn');
 
   // Sliders
-  sliderAngle = document.getElementById('slider-angle');
-  sliderMass = document.getElementById('slider-mass');
-  sliderForce = document.getElementById('slider-force');
-  sliderBarrel = document.getElementById('slider-barrel');
+  sliderAngle = requiredElement('slider-angle', 'input');
+  sliderMass = requiredElement('slider-mass', 'input');
+  sliderForce = requiredElement('slider-force', 'input');
+  forceMultiplier = requiredElement('force-multiplier', 'select');
+  forceMultiplier.addEventListener('change', () => updateSliderDisplay(sliderForce, valForce, ' N'));
+  sliderBarrel = requiredElement('slider-barrel', 'input');
 
   // Value readouts next to sliders
-  valAngle = document.getElementById('val-angle');
-  valMass = document.getElementById('val-mass');
-  valForce = document.getElementById('val-force');
-  valBarrel = document.getElementById('val-barrel');
+  valAngle = requiredElement('val-angle', 'output');
+  valMass = requiredElement('val-mass', 'output');
+  valForce = requiredElement('val-force', 'output');
+  valBarrel = requiredElement('val-barrel', 'output');
 
   // Buttons
-  btnFire = document.getElementById('btn-fire');
-  btnClear = document.getElementById('btn-clear');
+  btnFire = requiredElement('btn-fire', 'button');
+  btnClear = requiredElement('btn-clear', 'button');
 
   // Planet buttons
-  planetButtons = document.querySelectorAll('.planet-btn');
+  planetButtons = document.querySelectorAll<HTMLButtonElement>('.planet-btn');
   initWorldArtwork();
   initPlanetFacts();
 
   // Telemetry
-  readVelocity = document.getElementById('read-velocity');
-  readHeight = document.getElementById('read-height');
-  readDistance = document.getElementById('read-distance');
-  readKE = document.getElementById('read-ke');
-  readPE = document.getElementById('read-pe');
-  readTME = document.getElementById('read-tme');
+  readVelocity = requiredElement('read-velocity', 'span');
+  readHeight = requiredElement('read-height', 'span');
+  readDistance = requiredElement('read-distance', 'span');
+  readKE = requiredElement('read-ke', 'span');
+  readPE = requiredElement('read-pe', 'span');
+  readTME = requiredElement('read-tme', 'span');
 
   // Energy bar
-  energyBarKE = document.getElementById('energy-bar-ke');
-  energyBarPE = document.getElementById('energy-bar-pe');
+  energyBarKE = requiredElement('energy-bar-ke', 'div');
+  energyBarPE = requiredElement('energy-bar-pe', 'div');
 
   // Tooltip element
-  tooltipEl = document.getElementById('tooltip');
+  tooltipEl = requiredElement('tooltip', 'div');
 
   // Wire up slider live updates
   wireSlider(sliderAngle, valAngle, '°');
@@ -166,7 +191,7 @@ function init(callbacks) {
     (function (btn) {
       btn.addEventListener('click', function () {
         if (isFlightActive) return;
-        var g = parseFloat(btn.getAttribute('data-gravity'));
+        var g = parseFloat(btn.dataset.gravity ?? '');
         setGravity(g);
         highlightPlanet(btn.getAttribute('data-planet'));
         if (onGravityChange) onGravityChange(g);
@@ -188,8 +213,8 @@ function init(callbacks) {
   updateAllDisplays();
   refreshPreLaunch();
   document.querySelectorAll<HTMLInputElement>('.controls-scroll input[type="range"]').forEach(protectTouchRange);
-  document.getElementById('btn-cannon-settings-reset').addEventListener('click', () => resetSettings('cannon'));
-  document.getElementById('btn-rocket-settings-reset').addEventListener('click', () => resetSettings('rocket'));
+  requiredElement('btn-cannon-settings-reset', 'button').addEventListener('click', () => resetSettings('cannon'));
+  requiredElement('btn-rocket-settings-reset', 'button').addEventListener('click', () => resetSettings('rocket'));
 
   // Initial planet highlight
   highlightPlanet('earth');
@@ -211,7 +236,7 @@ function wireModeToggle() {
   }
 }
 
-function setMode(newMode) {
+function setMode(newMode: string | null) {
   if (isFlightActive || (newMode !== 'cannon' && newMode !== 'rocket')) return;
   // Restoring a recorded flight in the current
   // mode must not re-run the mode-switch side effects (range clear, camera).
@@ -227,20 +252,20 @@ function setMode(newMode) {
       btn.classList.remove('active');
     }
   }
-  document.getElementById('cannon-actions').hidden = currentMode !== 'cannon';
-  document.getElementById('rocket-actions').hidden = currentMode !== 'rocket';
+  requiredElement('cannon-actions', 'div').hidden = currentMode !== 'cannon';
+  requiredElement('rocket-actions', 'div').hidden = currentMode !== 'rocket';
   // Show/hide panels (the [hidden] rule in style.css does the display work)
   cannonPanel.hidden = currentMode !== 'cannon';
   rocketPanel.hidden = currentMode !== 'rocket';
   // A deep workshop scroll from one launcher must not hide the other's setup.
-  document.querySelector<HTMLElement>('.controls-scroll').scrollTop = 0;
+  document.querySelector<HTMLElement>('.controls-scroll')!.scrollTop = 0;
   // Notify main.ts
   if (onModeChange) onModeChange(currentMode);
 }
 
 // ── Slider helpers ─────────────────────────────────────────────────────────
 
-function wireSlider(slider, display, unit) {
+function wireSlider(slider: HTMLInputElement, display: HTMLElement, unit: string) {
   slider.addEventListener('input', function () {
     updateSliderDisplay(slider, display, unit);
     // If barrel slider changes, trigger barrel animation
@@ -251,7 +276,7 @@ function wireSlider(slider, display, unit) {
 }
 
 /** Preserve the exact selected or recorded surface gravity in m/s². */
-function setGravity(g) {
+function setGravity(g: number) {
   gravityValue = clampGravity(g);
 }
 
@@ -259,15 +284,16 @@ function currentGravity() {
   return gravityValue;
 }
 
-function updateSliderDisplay(slider, display, unit) {
+function updateSliderDisplay(slider: HTMLInputElement, display: HTMLElement, unit: string) {
   var v = parseFloat(slider.value);
   // Format nicely
   if (unit === '°') {
-    display.textContent = v.toFixed(0) + unit;
+    display.textContent = formatNumber(v, 0) + unit;
   } else if (unit === ' N') {
-    display.textContent = v.toFixed(0) + unit;
+    display.textContent = formatNumber(v * Number(forceMultiplier.value)) + unit;
+    slider.setAttribute('aria-valuetext', display.textContent);
   } else {
-    display.textContent = v.toFixed(1) + unit;
+    display.textContent = formatNumber(v, 1) + unit;
   }
 }
 
@@ -278,7 +304,7 @@ var PLANET_GRAVITY_MAP = ENVIRONMENTS.map(function (environment) {
   return { name: environment.name, g: environment.gravity };
 });
 
-function findClosestPlanetName(g) {
+function findClosestPlanetName(g: number) {
   var best = PLANET_GRAVITY_MAP[0], bd = Math.abs(g - best.g);
   for (var i = 1; i < PLANET_GRAVITY_MAP.length; i++) {
     var d = Math.abs(g - PLANET_GRAVITY_MAP[i].g);
@@ -287,13 +313,13 @@ function findClosestPlanetName(g) {
   return best.name;
 }
 
-function highlightNearestPlanet(g) {
+function highlightNearestPlanet(g: number) {
   highlightPlanet(findClosestPlanetName(g));
 }
 
 // ── Planet buttons ─────────────────────────────────────────────────────────
 
-function highlightPlanet(name) {
+function highlightPlanet(name: string | null) {
   for (var i = 0; i < planetButtons.length; i++) {
     var btn = planetButtons[i];
     btn.setAttribute('aria-pressed', String(btn.getAttribute('data-planet') === name));
@@ -304,22 +330,22 @@ function highlightPlanet(name) {
     }
   }
   var env = resolveEnvironment(currentGravity());
-  var label = document.getElementById('environment-label');
-  if (label) label.textContent = (env.interpolated ? 'Custom world' : env.name[0].toUpperCase() + env.name.slice(1)) + ' · ' + env.gravity.toFixed(2) + ' m/s²';
+  var label = requiredElement('environment-label', 'span');
+  if (label) label.textContent = (env.interpolated ? 'Custom world' : env.name[0].toUpperCase() + env.name.slice(1)) + ' · ' + formatNumber(env.gravity, 2) + ' m/s²';
   // A custom (interpolated) world has no fact card; the nearest preset stays
   // highlighted in the grid, but its facts would be misleading here.
   updatePlanetFactButton(env.interpolated ? null : env.name);
 }
 
 function initPlanetFacts() {
-  planetFactButton = document.getElementById('planet-fact-button');
-  planetFactButtonLabel = document.getElementById('planet-fact-button-label');
-  planetFactDialog = document.getElementById('planet-fact-dialog');
-  planetFactCard = document.getElementById('planet-fact-card');
-  planetFactArtwork = document.getElementById('planet-fact-artwork');
+  planetFactButton = requiredElement('planet-fact-button', 'button');
+  planetFactButtonLabel = requiredElement('planet-fact-button-label', 'span');
+  planetFactDialog = requiredElement('planet-fact-dialog', 'dialog');
+  planetFactCard = requiredElement('planet-fact-card', 'article');
+  planetFactArtwork = requiredElement('planet-fact-artwork', 'img');
   installFactExplanations(planetFactDialog);
   planetFactButton.addEventListener('click', function () {
-    const fact = getPlanetFact(planetFactButton.dataset.planet);
+    const fact = getPlanetFact(planetFactButton.dataset.planet ?? '');
     if (!fact) return;
     const art = getWorldArt(fact.id);
     hideTooltip();
@@ -358,7 +384,7 @@ function initPlanetFacts() {
 
 function initWorldArtwork() {
   for (const button of planetButtons) {
-    const id = button.getAttribute('data-planet');
+    const id = button.dataset.planet ?? '';
     const art = getWorldArt(id);
     const icon = button.querySelector('.planet-icon');
     if (!art || !icon) continue;
@@ -372,7 +398,7 @@ function initWorldArtwork() {
   }
 }
 
-function updatePlanetFactButton(name) {
+function updatePlanetFactButton(name: string | null) {
   const fact = name ? getPlanetFact(name) : undefined;
   const art = fact ? getWorldArt(fact.id) : undefined;
   if (!planetFactButton || !planetFactButtonLabel) return;
@@ -447,11 +473,11 @@ function wireTooltips() {
   }
 }
 
-function showTooltip(anchor, html, pinned) {
+function showTooltip(anchor: HTMLElement, html: string | null, pinned: boolean) {
   if (activeTooltipAnchor && activeTooltipAnchor !== anchor) activeTooltipAnchor.setAttribute('aria-expanded', 'false');
   activeTooltipAnchor = anchor;
   anchor.setAttribute('aria-expanded', 'true');
-  tooltipEl.innerHTML = html;
+  tooltipEl.innerHTML = html ?? '';
   tooltipEl.classList.toggle('pinned', !!pinned);
   tooltipEl.style.display = 'block';
 
@@ -485,82 +511,90 @@ function hideTooltip() {
 
 function initRocketPanel() {
   // Grab all rocket DOM elements
-  rocketPropSelect = document.getElementById('rocket-propellant');
-  propellantNote = document.getElementById('propellant-note');
+  rocketPropSelect = requiredElement('rocket-propellant', 'select');
+  propellantNote = requiredElement('propellant-note', 'p');
 
-  sliderRocketMR = document.getElementById('slider-rocket-mr');
-  sliderRocketPc = document.getElementById('slider-rocket-pc');
-  sliderRocketEps = document.getElementById('slider-rocket-eps');
-  sliderRocketDt = document.getElementById('slider-rocket-dt');
-  sliderRocketDryMass = document.getElementById('slider-rocket-drymass');
-  sliderRocketPropMass = document.getElementById('slider-rocket-propmass');
-  sliderRocketAngle = document.getElementById('slider-rocket-angle');
-  sliderRocketEtaC = document.getElementById('slider-rocket-etac');
-  sliderRocketEtaN = document.getElementById('slider-rocket-etan');
+  sliderRocketMR = requiredElement('slider-rocket-mr', 'input');
+  sliderRocketPc = requiredElement('slider-rocket-pc', 'input');
+  sliderRocketEps = requiredElement('slider-rocket-eps', 'input');
+  sliderRocketDt = requiredElement('slider-rocket-dt', 'input');
+  sliderRocketDryMass = requiredElement('slider-rocket-drymass', 'input');
+  sliderRocketPropMass = requiredElement('slider-rocket-propmass', 'input');
+  propMassMultiplier = requiredElement('rocket-propellant-multiplier', 'select');
+  propMassMultiplier.addEventListener('change', () => {
+    updateRocketSliderDisplay(sliderRocketPropMass, valRocketPropMass, ' kg');
+    refreshPreLaunch();
+  });
+  sliderRocketAngle = requiredElement('slider-rocket-angle', 'input');
+  sliderRocketEtaC = requiredElement('slider-rocket-etac', 'input');
+  sliderRocketEtaN = requiredElement('slider-rocket-etan', 'input');
 
-  valRocketMR = document.getElementById('val-rocket-mr');
-  valRocketPc = document.getElementById('val-rocket-pc');
-  valRocketEps = document.getElementById('val-rocket-eps');
-  valRocketDt = document.getElementById('val-rocket-dt');
-  valRocketDryMass = document.getElementById('val-rocket-drymass');
-  valRocketPropMass = document.getElementById('val-rocket-propmass');
-  valRocketAngle = document.getElementById('val-rocket-angle');
-  valRocketEtaC = document.getElementById('val-rocket-etac');
-  valRocketEtaN = document.getElementById('val-rocket-etan');
+  valRocketMR = requiredElement('val-rocket-mr', 'output');
+  valRocketPc = requiredElement('val-rocket-pc', 'output');
+  valRocketEps = requiredElement('val-rocket-eps', 'output');
+  valRocketDt = requiredElement('val-rocket-dt', 'output');
+  valRocketDryMass = requiredElement('val-rocket-drymass', 'output');
+  valRocketPropMass = requiredElement('val-rocket-propmass', 'output');
+  valRocketAngle = requiredElement('val-rocket-angle', 'output');
+  valRocketEtaC = requiredElement('val-rocket-etac', 'output');
+  valRocketEtaN = requiredElement('val-rocket-etan', 'output');
 
-  rocketGuidanceSelect = document.getElementById('rocket-guidance');
-  guidancePitchSub = document.getElementById('guidance-pitch-sub');
-  guidanceProgradeSub = document.getElementById('guidance-prograde-sub');
+  rocketGuidanceSelect = requiredElement('rocket-guidance', 'select');
+  guidancePitchSub = requiredElement('guidance-pitch-sub', 'div');
+  guidanceProgradeSub = requiredElement('guidance-prograde-sub', 'div');
+  guidanceOrbitSub = requiredElement('guidance-orbit-sub', 'div');
+  sliderOrbitAltitude = requiredElement('slider-rocket-orbit-altitude', 'input');
+  valOrbitAltitude = requiredElement('val-rocket-orbit-altitude', 'output');
 
-  sliderPitchEnd = document.getElementById('slider-rocket-pitch-end');
-  sliderPitchT1 = document.getElementById('slider-rocket-pitch-t1');
-  sliderPitchT2 = document.getElementById('slider-rocket-pitch-t2');
-  sliderProgradeVmin = document.getElementById('slider-rocket-prograde-vmin');
+  sliderPitchEnd = requiredElement('slider-rocket-pitch-end', 'input');
+  sliderPitchT1 = requiredElement('slider-rocket-pitch-t1', 'input');
+  sliderPitchT2 = requiredElement('slider-rocket-pitch-t2', 'input');
+  sliderProgradeVmin = requiredElement('slider-rocket-prograde-vmin', 'input');
 
-  valPitchEnd = document.getElementById('val-rocket-pitch-end');
-  valPitchT1 = document.getElementById('val-rocket-pitch-t1');
-  valPitchT2 = document.getElementById('val-rocket-pitch-t2');
-  valProgradeVmin = document.getElementById('val-rocket-prograde-vmin');
+  valPitchEnd = requiredElement('val-rocket-pitch-end', 'output');
+  valPitchT1 = requiredElement('val-rocket-pitch-t1', 'output');
+  valPitchT2 = requiredElement('val-rocket-pitch-t2', 'output');
+  valProgradeVmin = requiredElement('val-rocket-prograde-vmin', 'output');
 
-  efficiencySection = document.getElementById('efficiency-section');
-  efficiencyArrow = document.getElementById('efficiency-arrow');
+  efficiencySection = requiredElement('efficiency-section', 'div');
+  efficiencyArrow = requiredElement('efficiency-arrow', 'span');
 
-  btnLaunch = document.getElementById('btn-launch');
-  btnRocketClear = document.getElementById('btn-rocket-clear');
-  twWarning = document.getElementById('tw-warning');
-  fizzleMessage = document.getElementById('fizzle-message');
+  btnLaunch = requiredElement('btn-launch', 'button');
+  btnRocketClear = requiredElement('btn-rocket-clear', 'button');
+  twWarning = requiredElement('tw-warning', 'p');
+  fizzleMessage = requiredElement('fizzle-message', 'p');
 
   // Readout elements
-  readRocketThrust = document.getElementById('read-rocket-thrust');
-  readRocketMdot = document.getElementById('read-rocket-mdot');
-  readRocketIsp = document.getElementById('read-rocket-isp');
-  readRocketTW = document.getElementById('read-rocket-tw');
-  readRocketBurn = document.getElementById('read-rocket-burn');
-  readRocketDV = document.getElementById('read-rocket-dv');
-  readRocketVelocity = document.getElementById('read-rocket-velocity');
-  readRocketHeight = document.getElementById('read-rocket-height');
-  readRocketRange = document.getElementById('read-rocket-range');
-  readRocketProp = document.getElementById('read-rocket-prop');
-  readRocketImpulse = document.getElementById('read-rocket-impulse');
+  readRocketThrust = requiredElement('read-rocket-thrust', 'span');
+  readRocketMdot = requiredElement('read-rocket-mdot', 'span');
+  readRocketIsp = requiredElement('read-rocket-isp', 'span');
+  readRocketTW = requiredElement('read-rocket-tw', 'span');
+  readRocketBurn = requiredElement('read-rocket-burn', 'span');
+  readRocketDV = requiredElement('read-rocket-dv', 'span');
+  readRocketVelocity = requiredElement('read-rocket-velocity', 'span');
+  readRocketHeight = requiredElement('read-rocket-height', 'span');
+  readRocketRange = requiredElement('read-rocket-range', 'span');
+  readRocketProp = requiredElement('read-rocket-prop', 'span');
+  readRocketImpulse = requiredElement('read-rocket-impulse', 'span');
 
   // Live flight extended readouts
-  readRocketLiveThrust = document.getElementById('read-rocket-live-thrust');
-  readRocketLiveMass = document.getElementById('read-rocket-live-mass');
-  readRocketLiveIsp = document.getElementById('read-rocket-live-isp');
-  readRocketLiveTW = document.getElementById('read-rocket-live-tw');
+  readRocketLiveThrust = requiredElement('read-rocket-live-thrust', 'span');
+  readRocketLiveMass = requiredElement('read-rocket-live-mass', 'span');
+  readRocketLiveIsp = requiredElement('read-rocket-live-isp', 'span');
+  readRocketLiveTW = requiredElement('read-rocket-live-tw', 'span');
 
   // Propellant gauge
-  propGaugeOx = document.getElementById('prop-gauge-ox');
-  propGaugeFuel = document.getElementById('prop-gauge-fuel');
+  propGaugeOx = requiredElement('prop-gauge-ox', 'div');
+  propGaugeFuel = requiredElement('prop-gauge-fuel', 'div');
 
   // Post-flight summary
-  postFlightSummary = document.getElementById('post-flight-summary');
-  readPostRange = document.getElementById('read-post-range');
-  readPostFlightTime = document.getElementById('read-post-flighttime');
-  readPostBurnTime = document.getElementById('read-post-burntime');
-  readPostDvTsiolkovsky = document.getElementById('read-post-dv-tsiolkovsky');
-  readPostDvActual = document.getElementById('read-post-dv-actual');
-  readPostGravityLoss = document.getElementById('read-post-gravity-loss');
+  postFlightSummary = requiredElement('post-flight-summary', 'section');
+  readPostRange = requiredElement('read-post-range', 'span');
+  readPostFlightTime = requiredElement('read-post-flighttime', 'span');
+  readPostBurnTime = requiredElement('read-post-burntime', 'span');
+  readPostDvTsiolkovsky = requiredElement('read-post-dv-tsiolkovsky', 'span');
+  readPostDvActual = requiredElement('read-post-dv-actual', 'span');
+  readPostGravityLoss = requiredElement('read-post-gravity-loss', 'span');
 
   // Populate propellant dropdown from registry
   populatePropellantDropdown();
@@ -581,6 +615,46 @@ function initRocketPanel() {
   wireRocketSlider(sliderPitchT1, valPitchT1, ' s');
   wireRocketSlider(sliderPitchT2, valPitchT2, ' s');
   wireRocketSlider(sliderProgradeVmin, valProgradeVmin, ' m/s');
+  wireRocketSlider(sliderOrbitAltitude, valOrbitAltitude, ' km');
+  for (const id of ['rocket-angle', 'rocket-pitch-end', 'rocket-prograde-vmin', 'rocket-pitch-t1', 'rocket-pitch-t2', 'rocket-cutoff']) {
+    const precise = requiredElement('number-' + id, 'input');
+    const range = requiredElement('slider-' + id, 'input');
+    const commit = () => {
+      if (!Number.isFinite(precise.valueAsNumber)) { precise.value = range.value; return; }
+      range.value = precise.value;
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+      precise.value = range.value;
+    };
+    // Commit complete numbers, including browser autofill, on blur. Reordering
+    // the turn while typing a prefix ("1" on the way to "120") would move the
+    // other time unexpectedly. Range controls still update continuously.
+    precise.addEventListener('change', commit);
+    precise.addEventListener('blur', commit);
+    precise.addEventListener('keydown', event => { if (event.key === 'Enter') commit(); });
+  }
+  requiredElement('slider-rocket-cutoff', 'input').addEventListener('input', refreshPreLaunch);
+  for (const [id, adjustment] of [['cutoff-earlier', -.5], ['cutoff-later', .5], ['cutoff-full-tank', 0]] as const) {
+    requiredElement(id, 'button').addEventListener('click', () => {
+      if (isFlightActive) return;
+      const range = requiredElement('slider-rocket-cutoff', 'input');
+      const current = Number(range.value) || RocketPhysics.computePreLaunch(getRocketValues(), currentGravity()).burnTime;
+      range.value = adjustment === 0 ? '0' : String(Math.max(.1, (Number.isFinite(current) ? current : 0) + adjustment));
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+  requiredElement('btn-steering-practice', 'button').addEventListener('click', () => {
+    if (isFlightActive) return;
+    onRocketClear?.();
+    restoreFlightConfig('rocket', EARTH_STEERING_PRACTICE);
+    requiredElement('steering-practice-note', 'p').textContent = 'Ready on Earth. Fly this plan first, then try stopping 1 second earlier. Compare the lowest point of the two paths. All settings remain yours to change.';
+  });
+  requiredElement('btn-orbit-example', 'button').addEventListener('click', () => {
+    if (isFlightActive) return;
+    onRocketClear?.();
+    restoreFlightConfig('rocket', EARTH_ORBIT_EXAMPLE);
+    requiredElement('orbit-example-note', 'p').textContent = 'Ready! Earth, a suitable rocket and Orbit assist are selected. Now press Lift off — the rocket will steer itself.';
+    requiredElement('rocket-guidance-panel', 'section').classList.add('orbit-example-loaded');
+  });
 
   // Guidance mode dropdown
   rocketGuidanceSelect.addEventListener('change', function () {
@@ -595,7 +669,7 @@ function initRocketPanel() {
   });
 
   // Efficiency collapse toggle
-  var effToggle = document.getElementById('efficiency-toggle');
+  var effToggle = requiredElement('efficiency-toggle', 'button');
   effToggle.addEventListener('click', function () {
     var isOpen = !efficiencySection.classList.contains('rocket-efficiency-hidden');
     efficiencySection.classList.toggle('rocket-efficiency-hidden', isOpen);
@@ -643,11 +717,12 @@ function initRocketPanel() {
 function populatePropellantDropdown() {
   var registry = RocketPropellants.REGISTRY;
   var lastCategory = '';
+  let group: HTMLOptGroupElement | undefined;
   for (var i = 0; i < registry.length; i++) {
     var p = registry[i];
     // Add category optgroup
-    if (p.category !== lastCategory) {
-      var group = document.createElement('optgroup');
+    if (!group || p.category !== lastCategory) {
+      group = document.createElement('optgroup');
       group.label = p.category.charAt(0).toUpperCase() + p.category.slice(1);
       rocketPropSelect.appendChild(group);
       lastCategory = p.category;
@@ -679,6 +754,21 @@ function onPropellantChange() {
 
 function updateGuidanceSubPanels() {
   var mode = rocketGuidanceSelect.value;
+  const explanations: Record<string, string> = {
+    fixed: 'Keep the same angle above the local horizon. Useful for hops and comparing launch angles; a timed turn gives you more control over an orbit.',
+    pitch_program: 'You choose when to turn, where to point and when to stop. The rocket follows these commands without correcting its path. Times use the flight clock, not real waiting time.',
+    prograde_lock: 'Start at your launch angle, then point along the direction of travel above your chosen speed. Gravity bends that path. If speed falls below the threshold, the launch angle is used again.',
+    orbit_assist: 'Start upright, turn sideways and adjust thrust automatically. The engine stops when the orbit is reached. Load the assisted Earth example below for a suitable rocket.',
+  };
+  requiredElement('steering-help', 'p').textContent = explanations[mode] || explanations.fixed;
+  guidanceOrbitSub.classList.toggle('guidance-sub-hidden', mode !== 'orbit_assist');
+  requiredElement('guidance-cutoff-sub', 'div').hidden = mode === 'orbit_assist';
+  requiredElement('steering-plan', 'figure').hidden = mode === 'orbit_assist';
+  if (mode === 'orbit_assist') {
+    sliderRocketAngle.value = '90'; updateRocketSliderDisplay(sliderRocketAngle, valRocketAngle, '°');
+  }
+  sliderRocketAngle.disabled = isFlightActive || mode === 'orbit_assist';
+  requiredElement('number-rocket-angle', 'input').disabled = sliderRocketAngle.disabled;
   if (mode === 'pitch_program') {
     guidancePitchSub.classList.remove('guidance-sub-hidden');
   } else {
@@ -693,38 +783,48 @@ function updateGuidanceSubPanels() {
 
 // ── Rocket slider helpers ──────────────────────────────────────────────────
 
-function wireRocketSlider(slider, display, unit) {
+function wireRocketSlider(slider: HTMLInputElement, display: HTMLElement, unit: string) {
   if (!slider || !display) return;
   slider.addEventListener('input', function () {
+    // Keep the turn interval ordered without allowing an accidental instant flip.
+    if (slider === sliderPitchT1 && Number(sliderPitchT1.value) >= Number(sliderPitchT2.value)) {
+      sliderPitchT2.value = String(Number(sliderPitchT1.value) + .1);
+      updateRocketSliderDisplay(sliderPitchT2, valPitchT2, ' s');
+    }
+    if (slider === sliderPitchT2 && Number(sliderPitchT2.value) <= Number(sliderPitchT1.value)) {
+      sliderPitchT1.value = String(Number(sliderPitchT2.value) - .1);
+      updateRocketSliderDisplay(sliderPitchT1, valPitchT1, ' s');
+    }
     updateRocketSliderDisplay(slider, display, unit);
     refreshPreLaunch();
   });
 }
 
-function updateRocketSliderDisplay(slider, display, unit) {
+function updateRocketSliderDisplay(slider: HTMLInputElement, display: HTMLElement, unit: string) {
   var v = parseFloat(slider.value);
+  if (slider === sliderRocketPropMass) v *= Number(propMassMultiplier.value);
   if (unit === '°') {
-    display.textContent = v.toFixed(0) + unit;
-  } else if (unit === ' bar' || unit === ' mm' || unit === ' kg' || unit === ' m/s' || unit === ' %') {
-    display.textContent = v.toFixed(0) + unit;
+    display.textContent = formatNumber(v, Number(slider.step) < 1 ? 1 : 0) + unit;
+  } else if (unit === ' bar' || unit === ' mm' || unit === ' kg' || unit === ' km' || unit === ' m/s' || unit === ' %') {
+    display.textContent = formatNumber(v, 0) + unit;
   } else if (unit === ' s') {
-    display.textContent = v.toFixed(1) + unit;
+    display.textContent = formatNumber(v, 1) + unit;
   } else {
     // No unit — format based on step precision
     var step = parseFloat(slider.step) || 1;
     if (step < 0.1) {
-      display.textContent = v.toFixed(2);
+      display.textContent = formatNumber(v, 2);
     } else if (step < 1) {
-      display.textContent = v.toFixed(1);
+      display.textContent = formatNumber(v, 1);
     } else {
-      display.textContent = v.toFixed(0);
+      display.textContent = formatNumber(v, 0);
     }
   }
 }
 
 // ── Get rocket values ──────────────────────────────────────────────────────
 
-function getRocketValues() {
+function getRocketValues(): Required<Omit<RocketConfig, 'gravity' | 'Pa_Pa' | 'environment'>> & {environment:NonNullable<RocketConfig['environment']>;Pa_Pa:number} {
   var environment = resolveEnvironment(currentGravity());
   return {
     propellantId: rocketPropSelect.value,
@@ -733,9 +833,12 @@ function getRocketValues() {
     epsilon: parseFloat(sliderRocketEps.value),
     throatDia_mm: parseFloat(sliderRocketDt.value),
     dryMass: parseFloat(sliderRocketDryMass.value),
-    propMass: parseFloat(sliderRocketPropMass.value),
+    propMass: parseFloat(sliderRocketPropMass.value) * Number(propMassMultiplier.value),
+    propMassMultiplier: Number(propMassMultiplier.value),
     launchAngle: parseFloat(sliderRocketAngle.value),
-    guidanceMode: rocketGuidanceSelect.value,
+    guidanceMode: guidanceMode(rocketGuidanceSelect.value),
+    orbitAltitudeKm: Number(sliderOrbitAltitude.value),
+    cutoffTime: Number(requiredElement('slider-rocket-cutoff', 'input').value),
     etaC: parseFloat(sliderRocketEtaC.value),
     etaN: parseFloat(sliderRocketEtaN.value),
     Pa_Pa: environment.surfacePressure,
@@ -758,22 +861,73 @@ function getRocketZoomSettings() {
 function refreshPreLaunch() {
   var vals = getRocketValues();
   var gravity = currentGravity();
-  var pre: any = RocketPhysics.computePreLaunch(vals, gravity);
+  var pre = RocketPhysics.computePreLaunch(vals, gravity);
 
   // Full-run measurements come from the actual recorded flight. In particular,
   // an arbitrary prediction horizon must never masquerade as a reached apex.
   updatePreLaunchReadouts(pre);
+  updateSteeringPlan(vals, pre);
+  const assisted = vals.guidanceMode === 'orbit_assist';
+  const note = requiredElement('orbit-plan-note', 'p');
+  note.hidden = !assisted;
+  const environment = resolveEnvironment(gravity);
+  const speed = Math.sqrt(gravity * environment.radius ** 2 / (environment.radius + vals.orbitAltitudeKm * 1000));
+  const world = environment.interpolated ? 'this world' : environment.name[0].toUpperCase() + environment.name.slice(1);
+  note.textContent = `${formatNumber(vals.orbitAltitudeKm)} km above ${world} needs about ${formatNumber(speed)} m/s sideways. Your engine and fuel still do the work. Air drag is not modelled.`;
+  requiredElement('orbit-example-note', 'p').textContent = '1. Load this example. 2. Press Lift off. It selects Earth and a rocket ready for a 200 km orbit.';
+  requiredElement('steering-practice-note', 'p').textContent = 'Load a capable rocket and an editable turn-and-cutoff plan. Fly it, then change one setting and compare.';
+  requiredElement('rocket-guidance-panel', 'section').classList.remove('orbit-example-loaded');
 }
 
-function updatePreLaunchReadouts(pre) {
+function updateSteeringPlan(config: RocketConfig, pre: ReturnType<typeof RocketPhysics.computePreLaunch>) {
+  for (const id of ['rocket-angle', 'rocket-pitch-end', 'rocket-prograde-vmin', 'rocket-pitch-t1', 'rocket-pitch-t2', 'rocket-cutoff']) {
+    const precise = requiredElement('number-' + id, 'input');
+    if (document.activeElement !== precise) precise.value = requiredElement('slider-' + id, 'input').value;
+  }
+  const mode = config.guidanceMode;
+  const cutoff = config.cutoffTime ?? 0;
+  const fuelTime = pre.burnTime;
+  const end = Math.max(.1, Math.min(cutoff > 0 ? cutoff : Infinity, Number.isFinite(fuelTime) ? fuelTime : 600));
+  const stop = cutoff > 0 && cutoff < fuelTime
+    ? `Stop at ${formatNumber(cutoff, 1)} s, keeping unused fuel.`
+    : `Burn until the tank is empty${Number.isFinite(fuelTime) ? ` (about ${formatNumber(fuelTime, 1)} s)` : ''}.`;
+  const turn = `Hold ${formatNumber(config.launchAngle, 1)}° until ${formatNumber(config.pitchT1 ?? 5, 1)} s; turn to ${formatNumber(config.pitchEnd ?? 45, 1)}° by ${formatNumber(config.pitchT2 ?? 20, 1)} s.`;
+  requiredElement('steering-plan-summary', 'p').textContent = (mode === 'pitch_program' ? turn
+    : mode === 'prograde_lock' ? `Launch at ${formatNumber(config.launchAngle, 1)}°; follow your motion above ${formatNumber(config.progradeVmin ?? 10)} m/s.`
+    : `Hold ${formatNumber(config.launchAngle, 1)}° above the horizon.`) + ' ' + stop;
+  const svg = requiredElement('steering-plan', 'figure').querySelector('svg')!;
+  svg.style.display = mode === 'prograde_lock' ? 'none' : '';
+  const guidance = RocketPhysics.buildGuidance(config);
+  const initial = RocketPhysics.createRocketState(config);
+  const times = [...new Set([0, Math.min(end, config.pitchT1 ?? 5), Math.min(end, config.pitchT2 ?? 20), end])].sort((a, b) => a - b);
+  const path = times.map((time, i) => `${i ? 'L' : 'M'}${30 + 236 * time / end},${66 - guidance.getAngle({ ...initial, time }) * .6}`).join(' ');
+  svg.querySelector('#steering-plan-line')!.setAttribute('d', path);
+  svg.querySelector('#steering-cutoff-line')!.setAttribute('visibility', cutoff > 0 && cutoff < fuelTime ? 'visible' : 'hidden');
+  svg.querySelector('#steering-plan-end')!.textContent = formatNumber(end, 1) + ' s';
+  svg.querySelector('title')!.textContent = requiredElement('steering-plan-summary', 'p').textContent;
+  const environment = config.environment!;
+  const circular = Math.sqrt(environment.gravity * environment.radius);
+  let check = 'Try one change per flight. Earlier turning trades height for sideways speed; later cutoff adds speed but can overshoot.';
+  if (mode === 'orbit_assist') check = 'Orbit assist steers, throttles and stops for you. Your rocket still needs enough thrust and fuel.';
+  else if (!pre.canLaunch) check = 'This rocket cannot lift off with these settings. Increase upward thrust or reduce its mass.';
+  else if (mode === 'prograde_lock' && config.launchAngle === 90) check = 'A vertical launch has no sideways motion to follow. Tilt the launch angle below 90° to begin a gravity turn.';
+  else if (mode === 'pitch_program' && cutoff > 0 && cutoff <= (config.pitchT2 ?? 20)) check = 'Your engine stops before the turn finishes. Only the part of the turn before cutoff can change the flight path.';
+  else if (cutoff > 0 && cutoff >= fuelTime) check = 'Fuel runs out before this timer can stop the engine. Choose an earlier cutoff to leave fuel in the tank.';
+  else if (pre.deltaV < circular) check = `This tank has only about ${formatNumber(pre.deltaV)} m/s of ideal speed change. Near-surface circular speed here is about ${formatNumber(circular)} m/s, before climb and gravity losses. For Earth practice, load the capable rocket above.`;
+  else if (mode === 'pitch_program' && (config.pitchEnd ?? 45) > 15) check = 'Your final angle keeps much of the thrust pointed upward. For orbit practice, finish closer to the horizon to build sideways speed.';
+  else if (mode === 'fixed') check = 'Holding a steep angle mainly gains height. Use Timed turn to choose a separate climb and sideways burn.';
+  requiredElement('steering-plan-check', 'p').textContent = check;
+}
+
+function updatePreLaunchReadouts(pre: ReturnType<typeof RocketPhysics.computePreLaunch>) {
   if (!pre) return;
 
   readRocketThrust.textContent = formatSI(pre.thrust) + 'N';
-  readRocketMdot.textContent = pre.mdot.toFixed(3) + ' kg/s';
-  readRocketIsp.textContent = pre.Isp.toFixed(1) + ' s';
+  readRocketMdot.textContent = formatNumber(pre.mdot, 3) + ' kg/s';
+  readRocketIsp.textContent = formatNumber(pre.Isp, 1) + ' s';
 
   // T/W with colour coding
-  readRocketTW.textContent = pre.tw.toFixed(2);
+  readRocketTW.textContent = formatNumber(pre.tw, 2);
   var canLaunch = pre.canLaunch !== undefined ? pre.canLaunch : pre.tw * Math.sin(getRocketValues().launchAngle * Math.PI / 180) > 1;
   readRocketTW.className = 'readout-value ' + (!canLaunch ? 'rocket-tw-warn' : 'rocket-tw-ok');
 
@@ -783,7 +937,7 @@ function updatePreLaunchReadouts(pre) {
       ? 'Chamber pressure is too low for choked nozzle flow in this atmosphere. Try higher chamber pressure.'
       : pre.thrust <= 0
         ? 'This nozzle cannot produce thrust in this atmosphere. Try higher chamber pressure or a smaller expansion ratio.'
-      : 'Not enough upward thrust for immediate lift-off. Try less mass, more thrust, or a steeper launch.';
+      : 'Too heavy for this engine. In the workshop, increase throat diameter or chamber pressure; or try less propellant and a steeper launch.';
     twWarning.classList.remove('tw-warning-hidden');
     btnLaunch.classList.add('caution');
   } else {
@@ -791,24 +945,32 @@ function updatePreLaunchReadouts(pre) {
     btnLaunch.classList.remove('caution');
   }
 
-  readRocketBurn.textContent = isFinite(pre.burnTime) ? pre.burnTime.toFixed(1) + ' s' : '---';
-  readRocketDV.textContent = pre.deltaV.toFixed(0) + ' m/s';
+  readRocketBurn.textContent = isFinite(pre.burnTime) ? formatNumber(pre.burnTime, 1) + ' s' : '---';
+  readRocketDV.textContent = formatNumber(pre.deltaV, 0) + ' m/s';
 }
 
 // ── Rocket flight readouts (live during flight) ────────────────────────────
 
-function updateRocketReadouts(state, launchX?) {
+function updateRocketReadouts(state: RocketState | null, launchX?: number) {
   if (!state) {
     resetRocketReadouts();
     return;
   }
   var spd = Math.sqrt(state.vx * state.vx + state.vy * state.vy);
-  readRocketVelocity.textContent = spd.toFixed(1) + ' m/s';
-  readRocketHeight.textContent = Math.max(0, state.y).toFixed(1) + ' m';
-  var origin = Number.isFinite(launchX) ? launchX : 0;
-  readRocketRange.textContent = (state.x - origin).toFixed(1) + ' m';
-  readRocketProp.textContent = state.mProp.toFixed(1) + ' / ' + state.mPropInitial.toFixed(1) + ' kg';
+  readRocketVelocity.textContent = formatNumber(spd, 1) + ' m/s';
+  readRocketHeight.textContent = formatNumber(Math.max(0, state.y), 1) + ' m';
+  var origin = launchX !== undefined && Number.isFinite(launchX) ? launchX : 0;
+  readRocketRange.textContent = formatNumber(state.x - origin, 1) + ' m';
+  const fuelDigits = state.mPropInitial >= 10000 ? 0 : 1;
+  readRocketProp.textContent = formatNumber(state.mProp, fuelDigits) + ' / ' + formatNumber(state.mPropInitial, fuelDigits) + ' kg';
   readRocketImpulse.textContent = formatSI(state.totalImpulse) + 'N\u00B7s';
+  const orbit = orbitPathFeedback(state, currentGravity());
+  const orbitReadout = requiredElement('rocket-orbit-readout', 'div');
+  orbitReadout.hidden = !orbit.visible;
+  requiredElement('rocket-orbit-caption', 'p').textContent = orbit.caption;
+  requiredElement('read-rocket-periapsis', 'span').textContent = orbit.lowest;
+  requiredElement('read-rocket-apoapsis', 'span').textContent = orbit.highest;
+  requiredElement('rocket-orbit-note', 'p').textContent = orbit.note;
 
   // Extended live readouts
   if (readRocketLiveThrust) {
@@ -817,11 +979,11 @@ function updateRocketReadouts(state, launchX?) {
       : '0 N';
   }
   if (readRocketLiveMass) {
-    readRocketLiveMass.textContent = state.mass.toFixed(1) + ' kg';
+    readRocketLiveMass.textContent = formatNumber(state.mass, 1) + ' kg';
   }
   if (readRocketLiveIsp) {
     readRocketLiveIsp.textContent = state.engineOn && state.Isp > 0
-      ? state.Isp.toFixed(1) + ' s'
+      ? formatNumber(state.Isp, 1) + ' s'
       : '\u2014';
   }
   if (readRocketLiveTW) {
@@ -833,7 +995,7 @@ function updateRocketReadouts(state, launchX?) {
     var tw = state.mass > 0 && state.engineOn
       ? state.thrustMagnitude / (state.mass * localG)
       : 0;
-    readRocketLiveTW.textContent = tw > 0 ? tw.toFixed(2) : '\u2014';
+    readRocketLiveTW.textContent = tw > 0 ? formatNumber(tw, 2) : '\u2014';
     readRocketLiveTW.className = 'readout-value ' + (tw > 0 && tw < 1 ? 'rocket-tw-warn' : (tw >= 1 ? 'rocket-tw-ok' : ''));
   }
 
@@ -841,18 +1003,20 @@ function updateRocketReadouts(state, launchX?) {
 }
 
 function updateRocketFuel(display: RocketDisplay) {
-  const gauge = document.getElementById('prop-gauge')!;
+  const gauge = requiredElement('prop-gauge', 'div');
   const percent = display.fraction * 100;
   propGaugeOx.style.width = (percent * display.oxidiserFraction) + '%';
   propGaugeFuel.style.width = (percent * (1 - display.oxidiserFraction)) + '%';
-  readRocketProp.textContent = display.remaining.toFixed(1) + ' / ' + display.total.toFixed(1) + ' kg';
+  const fuelDigits = display.total >= 10000 ? 0 : 1;
+  readRocketProp.textContent = formatNumber(display.remaining, fuelDigits) + ' / ' + formatNumber(display.total, fuelDigits) + ' kg';
   gauge.setAttribute('aria-valuenow', percent.toFixed(1));
   gauge.setAttribute('aria-valuetext', Math.round(percent) + '% remaining; ' + display.label);
-  const status = document.getElementById('read-rocket-engine')!;
+  const status = requiredElement('read-rocket-engine', 'p');
   if (status.textContent !== display.label) status.textContent = display.label;
 }
 
 function resetRocketReadouts() {
+  requiredElement('rocket-orbit-readout', 'div').hidden = true;
   readRocketVelocity.textContent = '---';
   readRocketHeight.textContent = '---';
   readRocketRange.textContent = '---';
@@ -873,9 +1037,9 @@ function resetRocketReadouts() {
 
 // ── Fizzle message ─────────────────────────────────────────────────────────
 
-function showFizzleMessage(tw) {
+function showFizzleMessage(tw: number) {
   if (!fizzleMessage) return;
-  fizzleMessage.textContent = 'Upward thrust / weight was ' + tw.toFixed(2) +
+  fizzleMessage.textContent = 'Upward thrust / weight was ' + formatNumber(tw, 2) +
     '. The upward thrust must exceed the weight for immediate lift-off. Try less mass, more thrust, or a steeper angle.';
   fizzleMessage.classList.remove('fizzle-message-hidden');
 }
@@ -893,19 +1057,19 @@ function hideFizzleMessage() {
  *   burnoutSpeed is the speed at motor cut-off; omit it when the rocket never
  *   burnt out (dvActual is then used as the fallback).
  */
-function showPostFlightSummary(data) {
+function showPostFlightSummary(data: PostFlightSummary) {
   if (!postFlightSummary) return;
-  readPostRange.textContent = data.range.toFixed(1) + ' m';
-  readPostFlightTime.textContent = data.flightTime.toFixed(1) + ' s';
-  readPostBurnTime.textContent = Number.isFinite(data.burnTime) ? data.burnTime.toFixed(1) + ' s' : 'No burnout';
+  readPostRange.textContent = formatNumber(data.range, 1) + ' m';
+  readPostFlightTime.textContent = formatNumber(data.flightTime, 1) + ' s';
+  readPostBurnTime.textContent = data.burnTime !== null && Number.isFinite(data.burnTime) ? formatNumber(data.burnTime, 1) + ' s' : 'No burnout';
   var idealDv = data.dvTsiolkovsky;
   // A collision while powered is not burnout. Keep the missing measurement
   // missing instead of fabricating a zero-speed burnout from the impact state.
   var burnoutSpeed = data.burnoutSpeed !== undefined ? data.burnoutSpeed : data.dvActual;
-  readPostDvTsiolkovsky.textContent = Number.isFinite(idealDv) ? idealDv.toFixed(0) + ' m/s' : '—';
-  readPostDvActual.textContent = Number.isFinite(burnoutSpeed) ? burnoutSpeed.toFixed(0) + ' m/s' : 'No burnout';
-  readPostGravityLoss.textContent = Number.isFinite(idealDv) && Number.isFinite(burnoutSpeed)
-    ? (idealDv - burnoutSpeed).toFixed(0) + ' m/s'
+  readPostDvTsiolkovsky.textContent = Number.isFinite(idealDv) ? formatNumber(idealDv, 0) + ' m/s' : '—';
+  readPostDvActual.textContent = burnoutSpeed !== null && Number.isFinite(burnoutSpeed) ? formatNumber(burnoutSpeed, 0) + ' m/s' : 'No burnout';
+  readPostGravityLoss.textContent = Number.isFinite(idealDv) && burnoutSpeed !== null && Number.isFinite(burnoutSpeed)
+    ? formatNumber(idealDv - burnoutSpeed) + ' m/s'
     : '—';
   postFlightSummary.classList.remove('post-flight-hidden');
 }
@@ -917,10 +1081,10 @@ function hidePostFlightSummary() {
 
 // ── SI formatting helper ───────────────────────────────────────────────────
 
-function formatSI(value) {
-  if (value >= 1e6) return (value / 1e6).toFixed(2) + ' M';
-  if (value >= 1e3) return (value / 1e3).toFixed(1) + ' k';
-  return value.toFixed(1) + ' ';
+function formatSI(value: number) {
+  if (value >= 1e6) return formatNumber(value / 1e6, 2) + ' M';
+  if (value >= 1e3) return formatNumber(value / 1e3, 1) + ' k';
+  return formatNumber(value, 1) + ' ';
 }
 
 // ── Get current cannon values ──────────────────────────────────────────────
@@ -929,7 +1093,8 @@ function getValues() {
   return {
     angle: parseFloat(sliderAngle.value),
     mass: parseFloat(sliderMass.value),
-    force: parseFloat(sliderForce.value),
+    force: parseFloat(sliderForce.value) * Number(forceMultiplier.value),
+    forceMultiplier: Number(forceMultiplier.value),
     barrelLength: parseFloat(sliderBarrel.value),
     gravity: currentGravity()
   };
@@ -937,7 +1102,7 @@ function getValues() {
 
 // ── Update telemetry readouts ──────────────────────────────────────────────
 
-function updateReadouts(state, energy, maxTME?) {
+function updateReadouts(state: Pick<ProjectileState, 'x' | 'y' | 'vx' | 'vy'> | null, energy: ReturnType<typeof Physics.computeEnergy> | null, maxTME?: number) {
   if (!state) {
     readVelocity.textContent = '---';
     readHeight.textContent = '---';
@@ -951,14 +1116,14 @@ function updateReadouts(state, energy, maxTME?) {
   }
 
   var spd = Physics.speed(state);
-  readVelocity.textContent = spd.toFixed(1) + ' m/s';
-  readHeight.textContent = Math.max(0, state.y).toFixed(1) + ' m';
-  readDistance.textContent = state.x.toFixed(1) + ' m';
+  readVelocity.textContent = formatNumber(spd, 1) + ' m/s';
+  readHeight.textContent = formatNumber(Math.max(0, state.y), 1) + ' m';
+  readDistance.textContent = formatNumber(state.x, 1) + ' m';
 
   if (energy) {
-    readKE.textContent = energy.ke.toFixed(0) + ' J';
-    readPE.textContent = energy.pe.toFixed(0) + ' J';
-    readTME.textContent = energy.tme.toFixed(0) + ' J';
+    readKE.textContent = formatNumber(energy.ke, 0) + ' J';
+    readPE.textContent = formatNumber(energy.pe, 0) + ' J';
+    readTME.textContent = formatNumber(energy.tme, 0) + ' J';
 
     // Energy bar: divide by launch TME so bar shows conservation visually
     var denom = (maxTME && maxTME > 0) ? maxTME : energy.tme;
@@ -977,9 +1142,12 @@ function resetReadouts() {
 
 // ── Flight active state ────────────────────────────────────────────────────
 
-function setFlightActive(active) {
+function setFlightActive(active: boolean) {
   if (isFlightActive === active) return;
   isFlightActive = active;
+  if (active && requiredElement('rocket-guidance-panel', 'section')?.classList.contains('orbit-example-loaded')) {
+    requiredElement('orbit-example-note', 'p').textContent = 'Earth orbit example loaded. Orbit assist steers the rocket and stops the engine when the orbit is reached.';
+  }
   // The :disabled pseudo-class carries the styling; no extra class is needed.
   btnFire.disabled = active;
   if (btnLaunch) btnLaunch.disabled = active;
@@ -990,9 +1158,11 @@ function setFlightActive(active) {
   // A recorded flight has one immutable setup. Changing gravity or engine
   // controls beneath it would make the labels disagree with the animation.
   document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
-    '.controls-scroll input, .controls-scroll select, .planet-btn'
+    '.controls-scroll input, .controls-scroll select, .planet-btn, #btn-orbit-example, #btn-steering-practice, .steering-adjust button'
   ).forEach(function (control) { control.disabled = active; });
-  var note = document.getElementById('flight-lock-note');
+  if (sliderRocketAngle) sliderRocketAngle.disabled = active || rocketGuidanceSelect.value === 'orbit_assist';
+  requiredElement('number-rocket-angle', 'input').disabled = sliderRocketAngle.disabled;
+  var note = requiredElement('flight-lock-note', 'p');
   if (note) note.hidden = !active;
   if (active) hideTooltip();
 }
@@ -1000,11 +1170,11 @@ function setFlightActive(active) {
 // Restore labels as well as values when replaying a saved configuration.
 // These setters notify the same environment/barrel/mode listeners as editing
 // the controls. The main loop can suppress scene transitions during restore.
-function restoreFlightConfig(mode, config) {
+function restoreFlightConfig(mode: 'cannon' | 'rocket', config: LaunchSettings) {
   if (isFlightActive) return;
   setMode(mode);
-  applyLaunchSettings(document, mode, config);
-  if (Number.isFinite(config.gravity)) setGravity(config.gravity);
+  applyLaunchSettings(document, mode, mode === 'rocket' ? { cutoffTime: 0, ...config } : config);
+  if (config.gravity !== undefined && Number.isFinite(config.gravity)) setGravity(config.gravity);
   if (mode === 'rocket') onPropellantChange();
   updateAllDisplays();
   updateGuidanceSubPanels();
@@ -1027,19 +1197,19 @@ function resetSettings(mode: 'cannon' | 'rocket') {
 }
 
 function updateAllDisplays() {
-  [
+  ([
     [sliderAngle, valAngle, '°'], [sliderMass, valMass, ' kg'], [sliderForce, valForce, ' N'],
     [sliderBarrel, valBarrel, ' m']
-  ].forEach(function ([slider, display, unit]) { updateSliderDisplay(slider, display, unit); });
-  [
+  ] satisfies [HTMLInputElement, HTMLElement, string][]).forEach(function ([slider, display, unit]) { updateSliderDisplay(slider, display, unit); });
+  ([
     [sliderRocketMR, valRocketMR, ''], [sliderRocketPc, valRocketPc, ' bar'],
     [sliderRocketEps, valRocketEps, ''], [sliderRocketDt, valRocketDt, ' mm'],
     [sliderRocketDryMass, valRocketDryMass, ' kg'], [sliderRocketPropMass, valRocketPropMass, ' kg'],
     [sliderRocketAngle, valRocketAngle, '°'], [sliderRocketEtaC, valRocketEtaC, ''],
     [sliderRocketEtaN, valRocketEtaN, ''], [sliderPitchEnd, valPitchEnd, '°'],
     [sliderPitchT1, valPitchT1, ' s'], [sliderPitchT2, valPitchT2, ' s'],
-    [sliderProgradeVmin, valProgradeVmin, ' m/s']
-  ].forEach(function ([slider, display, unit]) { updateRocketSliderDisplay(slider, display, unit); });
+    [sliderProgradeVmin, valProgradeVmin, ' m/s'], [sliderOrbitAltitude, valOrbitAltitude, ' km']
+  ] satisfies [HTMLInputElement, HTMLElement, string][]).forEach(function ([slider, display, unit]) { updateRocketSliderDisplay(slider, display, unit); });
 }
 
 

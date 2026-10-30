@@ -76,7 +76,9 @@ export function sampleCannon(run:CannonRun,time:number):CannonSample {
   let lo=0,hi=samples.length-1;
   while(lo+1<hi) { const mid=(lo+hi)>>1; if(samples[mid].time<=t) lo=mid; else hi=mid; }
   const a=samples[lo],b=samples[hi],f=(t-a.time)/Math.max(1e-12,b.time-a.time);
-  return Object.fromEntries(Object.keys(a).map(key=>[key,a[key]+(b[key]-a[key])*f])) as unknown as CannonSample;
+  const result = { ...a };
+  for (const key of Object.keys(a) as (keyof CannonSample)[]) result[key] = a[key]+(b[key]-a[key])*f;
+  return result;
 }
 export function timeAtTravel(run:CannonRun,travel:number) {
   const x=clamp(travel);

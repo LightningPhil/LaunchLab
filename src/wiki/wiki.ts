@@ -9,11 +9,13 @@ import { cannonExhibitMarkup, mountCannonExhibit } from './cannon-exhibit.ts';
 import type { CannonSession } from './cannon-model.ts';
 import { rocketExhibitMarkup, mountRocketExhibit } from './rocket-exhibit.ts';
 import type { RocketSession } from './rocket-model.ts';
+import { scienceLabMarkup, mountScienceLab, type ScienceLabSession } from './science-labs.ts';
 
 let dialog: HTMLDialogElement | undefined;
 export const isWikiOpen = () => !!dialog?.open;
 const escape = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const symbol = (a: Article) => flightTopicArt(a.id) || (a.id === 'asteroid-belt' ? '⠿' : '◎');
+const symbol = (a: Article) => flightTopicArt(a.id) || (a.id==='escape-velocity'?'↗':a.id==='lagrange-points'?'✣':a.id==='telescopes'?'⌕':a.id === 'asteroid-belt' ? '⠿' : '◎');
+const labTaglines:Record<string,string>={cannons:'Pressure. A push. A boom.',rockets:'Thrust. Flight. Discovery.','escape-velocity':'One push. Will it return?','lagrange-points':'Nudge a probe. Find the balance.',telescopes:'Gather light. Split two stars.'};
 
 /** Self-contained reading space. Opening it pauses the lab through a callback;
  * the wiki never changes a world, launcher setting, or recorded experiment. */
@@ -23,7 +25,8 @@ export function installWiki(onVisibilityChange: (open: boolean) => void) {
   let family = 'jupiter';
   let cannonSession:CannonSession|undefined, disposeExhibit:(()=>void)|undefined;
   let rocketSession:RocketSession|undefined;
-  try { const saved = Number(localStorage.getItem('launch-lab-reading-level')); if ([0, 1, 2].includes(saved)) level = saved as Level; } catch { /* Storage is optional, including file:// builds. */ }
+  const scienceSessions=new Map<string,ScienceLabSession>();
+  try { const saved = Number(localStorage.getItem('launch-lab-reading-level')); if ([0, 1, 2].includes(saved)) level = saved as Level; } catch { /* Storage is optional, including private browsing. */ }
   dialog = document.createElement('dialog');
   dialog.className = 'atlas'; dialog.id = 'educational-wiki'; dialog.setAttribute('aria-label', 'Explore the Solar System, educational companion');
   dialog.innerHTML = `<header class="atlas-topbar"><button class="atlas-menu" type="button" aria-label="Show topics" aria-expanded="false" aria-controls="atlas-navigation">☰</button>
@@ -49,7 +52,7 @@ export function installWiki(onVisibilityChange: (open: boolean) => void) {
     const groups = [...new Set(ARTICLES.map(a => a.group))];
     nav.innerHTML = groups.map(group => {
       const items = matches.filter(a => a.group === group);
-      return items.length ? `<section><h2>${group}</h2>${items.map(a => `<a href="#wiki/${a.id}/${level + 1}" ${flightTopicArt(a.id) ? `class="atlas-flight-link atlas-flight-${a.id}"` : ''} ${a.id === article.id ? 'aria-current="page"' : ''}>${a.art ? `<img src="${WORLD_ART[a.art].mini}" alt="" width="26" height="26">` : `<span class="atlas-topic-symbol" aria-hidden="true">${symbol(a)}</span>`}<span>${a.title}${a.id === 'cannons' ? '<small>Pressure. A push. A boom.</small>' : a.id === 'rockets' ? '<small>Thrust. Flight. Discovery.</small>' : ''}</span></a>`).join('')}</section>` : '';
+      return items.length ? `<section><h2>${group}</h2>${items.map(a => `<a href="#wiki/${a.id}/${level + 1}" ${flightTopicArt(a.id) ? `class="atlas-flight-link atlas-flight-${a.id}"` : ''} ${a.id === article.id ? 'aria-current="page"' : ''}>${a.art ? `<img src="${WORLD_ART[a.art].mini}" alt="" width="26" height="26">` : `<span class="atlas-topic-symbol" aria-hidden="true">${symbol(a)}</span>`}<span>${a.title}${labTaglines[a.id]?`<small>${labTaglines[a.id]}</small><em class="atlas-interactive-badge">Interactive lab ↗</em>`:''}</span></a>`).join('')}</section>` : '';
     }).join('') || '<p class="atlas-empty">No topics found. Try “ice”, “gravity” or “moons”.</p>';
     dialog!.querySelector('.atlas-search-status')!.textContent = search.value.trim() ? `${matches.length} ${matches.length === 1 ? 'topic' : 'topics'} found` : '';
   }
@@ -92,7 +95,7 @@ export function installWiki(onVisibilityChange: (open: boolean) => void) {
     disposeExhibit?.(); disposeExhibit=undefined;
     const number = String(ARTICLES.indexOf(article) + 1).padStart(2, '0');
     const illustration = article.id === 'solar-system' ? solarPlate(level) : article.id === 'kuiper-belt' ? kuiperPlate(level) : article.id === 'asteroid-belt' ? asteroidPlate()
-      : article.id === 'cannons' ? cannonExhibitMarkup() : article.id === 'rockets' ? rocketExhibitMarkup() : '';
+      : article.id === 'cannons' ? cannonExhibitMarkup() : article.id === 'rockets' ? rocketExhibitMarkup() : article.lab?scienceLabMarkup(article.lab):'';
     main.innerHTML = `<article class="atlas-article" data-topic="${article.id}">
       <div class="atlas-breadcrumb"><a href="#wiki/solar-system/${level + 1}">Atlas</a><span aria-hidden="true">/</span><span>${article.group}</span><span class="atlas-index">ENTRY ${number} / ${ARTICLES.length}</span></div>
       <header class="atlas-hero ${article.art ? 'atlas-world-hero' : ''}"><div class="atlas-hero-copy"><p class="atlas-kicker">${article.kind}</p><h1 id="atlas-title" tabindex="-1">${article.title}</h1><p class="atlas-deck">${article.description}</p>${article.say ? `<p class="atlas-say"><span>Say it</span><strong>${article.say}</strong></p>` : ''}</div>${article.art ? `<div class="atlas-world-art"><span class="atlas-world-orbit" aria-hidden="true"></span><img src="${WORLD_ART[article.art].full}" alt="Illustration of ${article.title.replace(' & the outer frontier', '')}" width="320" height="320"><span class="atlas-world-caption">A WORLD WORTH KNOWING</span></div>` : ''}</header>
@@ -114,6 +117,10 @@ export function installWiki(onVisibilityChange: (open: boolean) => void) {
     if(article.id==='rockets') {
       const exhibit=mountRocketExhibit(main.querySelector<HTMLElement>('.rocket-exhibit')!,rocketSession);
       disposeExhibit=()=>{rocketSession=exhibit.dispose();};
+    }
+    if(article.lab){
+      const id=article.id,exhibit=mountScienceLab(main.querySelector<HTMLElement>('.science-lab')!,article.lab,scienceSessions.get(id));
+      disposeExhibit=()=>{scienceSessions.set(id,exhibit.dispose());};
     }
     renderNav();
     dialog!.querySelector<HTMLAnchorElement>('.atlas-brand')!.href = `#wiki/solar-system/${level + 1}`;

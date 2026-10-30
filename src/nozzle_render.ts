@@ -1,4 +1,12 @@
 import { RocketPropellants } from './rocket_propellants.ts';
+import { formatNumber } from './number-format.ts';
+
+/** Engine measurements accepted by both the scene inset and the setup sketch. */
+export interface NozzleData {
+  epsilon?:number; MR?:number; throatDia_mm?:number; At?:number; mdot?:number; output?:number; Pc_bar?:number;
+  gamma?:number; Tc_K?:number; Pa_Pa?:number; Pc_Pa?:number; flowRegime?:string; effectiveEpsilon?:number;
+  thrust?:number; Isp?:number; cStar?:number; Cf?:number; worldTime?:number; engineLabel?:string;
+}
 
 /**
  * ============================================================================
@@ -23,6 +31,8 @@ import { RocketPropellants } from './rocket_propellants.ts';
  *   draw(ctx, canvasW, canvasH, nozzleData)  → void
  * ============================================================================
  */
+
+type NozzleLayout = ReturnType<typeof computeLayout>;
 
 // ── Layout Constants ─────────────────────────────────────────────────────
 var INSET_MARGIN_X = 20;
@@ -52,11 +62,11 @@ var MACH_STOPS = [
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+function clamp(v: number, lo: number, hi: number) { return v < lo ? lo : v > hi ? hi : v; }
 
-function lerp(a, b, t) { return a + (b - a) * t; }
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
-function lerpRGB(c1, c2, t) {
+function lerpRGB(c1: readonly number[], c2: readonly number[], t: number) {
   return [
     Math.round(lerp(c1[0], c2[0], t)),
     Math.round(lerp(c1[1], c2[1], t)),
@@ -65,7 +75,7 @@ function lerpRGB(c1, c2, t) {
 }
 
 /** 3-stop colour interpolation: low→mid→high over t∈[0,1] */
-function chamberColour(t) {
+function chamberColour(t: number) {
   t = clamp(t, 0, 1);
   if (t < 0.5) {
     return lerpRGB(COL_CHAMBER_LOW, COL_CHAMBER_MID, t * 2);
@@ -74,7 +84,7 @@ function chamberColour(t) {
 }
 
 /** Sample the Mach colour ramp at normalised position t∈[0,1] */
-function machColour(t) {
+function machColour(t: number) {
   t = clamp(t, 0, 1);
   for (var i = 0; i < MACH_STOPS.length - 1; i++) {
     var s0 = MACH_STOPS[i], s1 = MACH_STOPS[i + 1];
@@ -91,7 +101,7 @@ function machColour(t) {
 }
 
 /** Draw a rounded rectangle path (no fill/stroke — just the path) */
-function roundRectPath(ctx, x, y, w, h, r) {
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.lineTo(x + w - r, y);
@@ -111,8 +121,9 @@ function roundRectPath(ctx, x, y, w, h, r) {
 // nozzle region, all in local coordinates relative to the inset's
 // internal drawing area.
 //
-function computeLayout(d, iw, ih) {
-  var At     = d.At || 0.002;
+function computeLayout(d: NozzleData, iw: number, ih: number) {
+  const throatDiameter = d.throatDia_mm !== undefined && d.throatDia_mm > 0 ? d.throatDia_mm : Math.sqrt((d.At || .002) / Math.PI) * 2000;
+  var At     = Math.PI * (throatDiameter / 2000) ** 2;
   var eps    = clamp(d.epsilon || 20, 2, 250);
   var MR     = clamp(d.MR || 2.5, 0.5, 15);
   var mdot   = Math.max(0, d.mdot ?? 5);
@@ -143,22 +154,17 @@ function computeLayout(d, iw, ih) {
   var xExit     = xThroatEnd + divFrac * iw;
 
   // ── Half-heights ──
-  var CR = 4;  // contraction ratio (typical)
+  var chamberRadiusRatio = 4; // schematic chamber; its area is 16 throat areas
   var maxHalfH = ih * 0.42;  // leave room for labels/title
-  // Throat: minimum visual size
-  var throatHalfH = ih * 0.06;
-  // Chamber: based on contraction ratio
-  var chamberHalfH = throatHalfH * clamp(CR, 2, 8);
-  // Exit: based on expansion ratio
+  // Compress the 5–2,000 mm diameter range so small engines stay readable.
+  // Apply this AFTER the fit calculation: fitting each resized nozzle back to
+  // the same height would hide the diameter change again. Area ratios remain
+  // exact within the cross-section, while absolute size is illustrative.
+  const size = .32 + .68 * clamp(Math.log1p(throatDiameter / 5) / Math.log1p(2000 / 5), 0, 1);
+  const fittedThroat = Math.min(ih * .1, maxHalfH / Math.max(chamberRadiusRatio, Math.sqrt(eps)));
+  var throatHalfH = fittedThroat * size;
+  var chamberHalfH = throatHalfH * chamberRadiusRatio;
   var exitHalfH = throatHalfH * Math.sqrt(eps);
-  // Clamp to fit
-  var maxNeeded = Math.max(chamberHalfH, exitHalfH);
-  if (maxNeeded > maxHalfH) {
-    var shrink = maxHalfH / maxNeeded;
-    throatHalfH  *= shrink;
-    chamberHalfH *= shrink;
-    exitHalfH    *= shrink;
-  }
 
   // ── Pipe sizes (from MR) ──
   var basePipeH = chamberHalfH * 0.18;
@@ -193,6 +199,7 @@ function computeLayout(d, iw, ih) {
     output: output,
     Pc_bar: Pc_bar,
     At: At,
+    throatDiameter: throatDiameter,
     // Inner dims
     iw: iw,
     ih: ih
@@ -202,7 +209,7 @@ function computeLayout(d, iw, ih) {
 // ── Drawing primitives for each region ───────────────────────────────────
 
 // 3.1 Feed Pipes
-function drawFeedPipes(ctx, L, cy) {
+function drawFeedPipes(ctx: CanvasRenderingContext2D, L: NozzleLayout, cy: number) {
   var xEnd = L.xChamber;
   var xStart = L.xFeed;
   var pipeLen = xEnd - xStart;
@@ -243,7 +250,7 @@ function drawFeedPipes(ctx, L, cy) {
 }
 
 // 3.2 Combustion Chamber
-function drawChamber(ctx, L, cy) {
+function drawChamber(ctx: CanvasRenderingContext2D, L: NozzleLayout, cy: number) {
   var x = L.xChamber;
   var w = L.xConvStart - x;
   var col = L.chamCol;
@@ -270,7 +277,7 @@ function drawChamber(ctx, L, cy) {
 }
 
 // 3.3 Converging Section (Bézier taper)
-function drawConverging(ctx, L, cy) {
+function drawConverging(ctx: CanvasRenderingContext2D, L: NozzleLayout, cy: number) {
   var x0 = L.xConvStart;
   var x1 = L.xThroat;
   var hTop0 = L.chamberHalfH;
@@ -325,7 +332,7 @@ function drawConverging(ctx, L, cy) {
 }
 
 // 3.4 Throat (narrow band + glow)
-function drawThroat(ctx, L, cy) {
+function drawThroat(ctx: CanvasRenderingContext2D, L: NozzleLayout, cy: number) {
   var x0 = L.xThroat;
   var x1 = L.xThroatEnd;
   var hh = L.throatHalfH;
@@ -350,7 +357,7 @@ function drawThroat(ctx, L, cy) {
 }
 
 // 3.5 Diverging Section (expansion bell — Bézier flare)
-function drawDiverging(ctx, L, cy) {
+function drawDiverging(ctx: CanvasRenderingContext2D, L: NozzleLayout, cy: number) {
   var x0 = L.xThroatEnd;
   var x1 = L.xExit;
   var hh0 = L.throatHalfH;
@@ -394,7 +401,7 @@ function drawDiverging(ctx, L, cy) {
 }
 
 // 3.6 Exit Plume Hint
-function drawPlume(ctx, L, cy, d) {
+function drawPlume(ctx: CanvasRenderingContext2D, L: NozzleLayout, cy: number, d: NozzleData) {
   if ((L.output <= 0 && d.flowRegime !== 'unchoked') || d.flowRegime === 'off' || d.output === 0) return;
   var x0 = L.xExit;
   var hh = L.exitHalfH;
@@ -476,7 +483,7 @@ function drawPlume(ctx, L, cy, d) {
  * Get the nozzle half-height at a normalised x position (0 = chamber start,
  * 1 = exit). Uses the same regions as the geometry layout.
  */
-function halfHeightAt(L, tNorm) {
+function halfHeightAt(L: NozzleLayout, tNorm: number) {
   // Define region boundaries in normalised coordinates
   var xChamberNorm = (L.xConvStart - L.xChamber) / (L.xExit - L.xChamber);
   var xThroatNorm  = (L.xThroat - L.xChamber) / (L.xExit - L.xChamber);
@@ -501,7 +508,7 @@ function halfHeightAt(L, tNorm) {
   }
 }
 
-function drawStreamlines(ctx, L, cy, worldTime) {
+function drawStreamlines(ctx: CanvasRenderingContext2D, L: NozzleLayout, cy: number, worldTime: number) {
   if (!(L.mdot > 0) || L.output <= 0) return;
   var numLines = 3 + Math.floor(clamp(L.mdot / 10, 0, 5));
   var nozzleStartX = L.xChamber;
@@ -570,18 +577,18 @@ function drawStreamlines(ctx, L, cy, worldTime) {
 
 // ── 5. Annotations & Labels ──────────────────────────────────────────────
 
-function drawLabels(ctx, L, cy, d) {
+function drawLabels(ctx: CanvasRenderingContext2D, L: NozzleLayout, cy: number) {
   var labelY=cy-Math.max(L.chamberHalfH,L.exitHalfH)-9;
   ctx.font='500 11px system-ui, sans-serif';
   ctx.fillStyle='#dbe1d7';ctx.textAlign='center';ctx.textBaseline='bottom';
   ctx.fillText('Chamber',(L.xChamber+L.xConvStart)/2,labelY);
   ctx.fillText('Throat',(L.xThroat+L.xThroatEnd)/2,labelY);
   ctx.fillText('Bell',(L.xThroatEnd+L.xExit)/2,labelY);
-  var throat=d.throatDia_mm||50;
-  var exit=throat*Math.sqrt(d.epsilon||20);
+  var throat=L.throatDiameter;
+  var exit=throat*Math.sqrt(L.eps);
   ctx.textAlign='left';ctx.textBaseline='top';ctx.fillStyle='#b9c9c7';
   ctx.font='10px system-ui, sans-serif';
-  ctx.fillText('Throat '+Math.round(throat)+' mm  ·  Exit '+Math.round(exit)+' mm',L.xFeed,cy+Math.max(L.chamberHalfH,L.exitHalfH)+24);
+  ctx.fillText('Throat '+formatNumber(throat)+' mm  ·  Exit '+formatNumber(exit)+' mm',L.xFeed,cy+Math.max(L.chamberHalfH,L.exitHalfH)+24);
 }
 
 // ── Main draw function ───────────────────────────────────────────────────
@@ -593,7 +600,7 @@ function insetBounds(canvasW:number, canvasH:number) {
   return { x:canvasW - width - INSET_MARGIN_X, y:INSET_MARGIN_Y, width, height:INSET_MAX_H };
 }
 
-function draw(ctx, canvasW, canvasH, d, panel = false) {
+function draw(ctx: CanvasRenderingContext2D, canvasW: number, canvasH: number, d: NozzleData | null, panel = false) {
   if (!d) return;
 
   // ── Compute inset size & position ──
@@ -621,6 +628,8 @@ function draw(ctx, canvasW, canvasH, d, panel = false) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillText('Nozzle Sketch', ix + PADDING, iy + 10);
+  ctx.font = '10px system-ui, sans-serif'; ctx.fillStyle = '#b9c9c7'; ctx.textAlign = 'right';
+  ctx.fillText('Sizes compressed', ix + iw - PADDING, iy + 11);
 
   // ── Internal coordinate system ──
   // Drawing area within padding
@@ -654,7 +663,7 @@ function draw(ctx, canvasW, canvasH, d, panel = false) {
   drawStreamlines(ctx, L, cy, worldTime);
 
   // ── Labels & dimensions ──
-  drawLabels(ctx, L, cy, d);
+  drawLabels(ctx, L, cy);
   if (d.engineLabel) {
     ctx.font = '500 10px system-ui, sans-serif';
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
@@ -678,6 +687,6 @@ function draw(ctx, canvasW, canvasH, d, panel = false) {
 // ── Expose namespace ─────────────────────────────────────────────────────
 export const NozzleRender = {
   draw: draw,
-  drawPanel: (ctx, width, height, data) => draw(ctx, width, height, data, true),
-  insetBounds
+  drawPanel: (ctx: CanvasRenderingContext2D, width: number, height: number, data: NozzleData) => draw(ctx, width, height, data, true),
+  insetBounds, computeLayout
 };

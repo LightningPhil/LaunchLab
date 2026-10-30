@@ -1,14 +1,29 @@
-# Orrery surface artwork
+# Planet surface artwork
 
-Thirteen original equirectangular surface illustrations generated with the built-in imagegen tool on 2026-10-03: Sun, Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, Moon, Ganymede and Charon.
+The flight view and orrery share thirteen local equirectangular maps, upgraded on 2026-10-12. Resolution is selected automatically from each world's projected **physical pixel diameter**, including display scaling. No new controls are needed.
 
 ## Assets and resolution
 
-Final assets live in `src/assets/orrery/`. Each body has a 512×256 overview WebP and a 2048×1024 close-up WebP. The generation tool returned 1774×887 originals; the 2K variants are Lanczos resamples, not additional measured surface detail. All packaged artwork is local and works in the standalone build.
+Final assets live in `src/assets/orrery/`. All levels for a world come from the same source so geography and colour stay consistent during upgrades. No packaged image is upscaled beyond its source.
 
-Three.js uses sRGB albedo, anisotropic filtering and trilinear GPU mipmaps. Overview maps load when the Orrery opens. Close-up maps load when a visible body spans 96 physical pixels, remain active until it falls below 64 pixels, and release GPU storage after 15 seconds away. The original maps are illustrative, not spacecraft mosaics or accurate cartography. Planetary shading remains ambient/studio-lit.
+| Worlds | Map widths (height is half the width) | Source |
+| --- | --- | --- |
+| Earth, Mercury, Mars, Moon | 512 / 2,048 / 8,192 | Solar System Scope / INOVE |
+| Sun, Venus atmosphere, Jupiter, Saturn | 512 / 2,048 / 4,096 | Solar System Scope / INOVE |
+| Uranus, Neptune | 512 / 2,048 | Solar System Scope / INOVE |
+| Pluto | 512 / 2,048 / 4,096 | NASA VTAD |
+| Ganymede | 512 / 2,048 | NASA VTAD |
+| Charon | 512 / 1,264 | NASA VTAD |
 
-`tools/orrery-texture-sources.json` records the complete generation prompts and original filenames. To re-export with Pillow, run `python tools/prepare-orrery-textures.py PATH_TO_GENERATED_ORIGINALS`. Only resampling and WebP encoding are performed by that script.
+The [Solar System Scope maps](https://www.solarsystemscope.com/textures/) are licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with NASA-based imagery, adjusted colours and fictional gap filling. NASA VTAD maps are extracted from the [Pluto](https://science.nasa.gov/resource/pluto-3d-model/), [Ganymede](https://science.nasa.gov/resource/ganymede-3d-model/) and [Charon](https://science.nasa.gov/resource/charon-3d-model/) models. Their detailed and poorly mapped regions reflect available source coverage; they are visualization assets, not uniformly resolved scientific cartography. Full credits are in `THIRD_PARTY_NOTICES.txt`, also accessible in the app manual, and the orrery's About the model panel.
+
+The shared LOD policy upgrades at 96 and 512 physical pixels, downgrades at 64 and 384 pixels to avoid flickering, and waits 300 ms before requesting the largest map. Existing textures stay visible while replacements load; failures retain a lower resolution. Unused detail resources are released after 15 seconds. The orrery also releases detail textures when closed and respects the GPU's maximum texture size. It uses sRGB, anisotropic filtering and trilinear mipmaps.
+
+The launch view previously always projected the 512-wide map onto a fixed 640-pixel globe. It now projects the selected map onto a colour layer up to 2,048 pixels across, preserving the same world orientation and lighting. The layer is fully opaque, with limb colours extended beyond the disc. A live vector circle defines the surface outline at the final screen resolution; the texture never supplies a pixel-based silhouette that could become a staircase under magnification. CPU projection yields in short chunks to keep launches and zoom responsive. Decodes/projections are serialized, source buffers are discarded after baking, obsolete jobs are cancelled, and at most three worlds are retained. All maps are packaged with the web build; no external texture server is needed at runtime.
+
+`tools/world-texture-sources.json` records exact source URLs, native dimensions, credits and SHA-256 checksums. Re-export with Pillow using `python tools/prepare-orrery-textures.py CACHE_DIRECTORY --download`. Only GLB image extraction, downsampling and WebP encoding happen in this script. The earlier 1774×887 generated illustrations and their upsampled 2K variants have been replaced; `tools/orrery-texture-sources.json` preserves their historical prompts.
+
+At close zoom, the physical disc can have a screen radius of billions of pixels. Canvas loses precision when filling such a large circle, producing stair steps even with vector outlines. Ground fills, surface bands and shading therefore use a viewport-local tangent frame above 16 viewport diagonals. Short quadratic curves follow the exact circular sagitta with subpixel error; all coordinates sent to Canvas stay near the viewport. This includes sideways and upside-down landing sites, and both solid and gas worlds. The normal circle and globe artwork remain in use at wider views.
 
 ## Satellite motion
 

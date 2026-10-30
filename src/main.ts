@@ -10,6 +10,7 @@ import { RocketPropellants } from './rocket_propellants.ts';
 import { RocketPhysics } from './rocket_physics.ts';
 import { NozzleRender } from './nozzle_render.ts';
 import { Renderer } from './renderer.ts';
+import { ZoomControls } from './zoom-controls.ts';
 import { UI } from './ui.ts';
 import { characterForWorld } from './world-characters.ts';
 import { chooseIdleLook, clearRocketWatch, rocketWatchAim } from './crew-watch.ts';
@@ -21,6 +22,10 @@ import { installWiki, isWikiOpen } from './wiki/wiki.ts';
 import { installManual, isManualOpen } from './manual.ts';
 import { installResponsiveLayout, drawSetupNozzle, isSetupNozzleVisible } from './responsive-layout.ts';
 import { installWelcome, isWelcomeOpen } from './welcome.ts';
+import { requiredElement } from './dom.ts';
+import type { ProjectileState } from './physics.ts';
+import type { RocketState } from './rocket_physics.ts';
+import type { SceneCharacter, Particle, ParticleOptions } from './scene-types.ts';
 
 const isReadingOpen = () => isWelcomeOpen() || isWikiOpen() || isManualOpen() || document.body.classList.contains('orrery-open');
 
@@ -43,6 +48,7 @@ const isReadingOpen = () => isWelcomeOpen() || isWikiOpen() || isManualOpen() ||
  */
 
 let deck: FlightDeck;
+let zoomControls: ZoomControls;
 let flightBuild: AbortController | null = null;
 let displayedFlightState:any=null;
 let viewActive = false;
@@ -58,22 +64,22 @@ const reducedMotionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 const reducedMotion = () => reducedMotionQuery.matches;
 
 // ── State ──────────────────────────────────────────────────────────────────
-var canvas;
-var currentMode = 'cannon';  // 'cannon' | 'rocket'
-var activeBall = null;
-var shots = [];              // Landed shot objects
-var trajectoryDots = [];
-var particles = [];
+var canvas: HTMLCanvasElement;
+var currentMode: 'cannon' | 'rocket' = 'cannon';  // 'cannon' | 'rocket'
+var activeBall: ProjectileState | null = null;
+var shots: {x:number;number:number;flagSpring:number;isGas:boolean}[] = [];              // Landed shot objects
+var trajectoryDots: {x:number;y:number}[] = [];
+var particles: Particle[] = [];
 var maxShots = 8;
 
 // Rocket presentation state
-var activeRocket = null;     // null | recorded rocket state plus presentation fields
+var activeRocket: (RocketState & {phase:'flight'|'fizzle'|'fizzle_done';maxThrust:number;fizzleProgress:number}) | null = null;     // null | recorded rocket state plus presentation fields
 var rocketLanded = false;    // True after rocket has impacted
-var landedRocket = null;     // { x, epsilon, timer, phase, impactSpeed }
+var landedRocket: {x:number;epsilon:number;timer:number;phase:string;impactSpeed:number|null} | null = null;     // { x, epsilon, timer, phase, impactSpeed }
 var rocketMaxThrust = 0;     // Initial thrust for exhaust scaling
 var rocketFizzleTimer = 0;   // Fizzle animation progress timer
 var rocketFizzleDuration = 0; // How long the fizzle burn lasts
-var rocketEngineAudio = null; // Running engine audio nodes
+var rocketEngineAudio: {source:AudioBufferSourceNode;gain:GainNode} | null = null; // Running engine audio nodes
 
 // Cannon animation
 var recoilOffset = 0;
@@ -88,7 +94,7 @@ var impactShockwaveX = 0;
 var squashTimer = -1;
 
 // Audio
-var audioCtx = null;
+var audioCtx: AudioContext | null = null;
 
 // Timing
 var lastTime = 0;
@@ -128,15 +134,15 @@ var clangCooldown     = 0;
 // ── Comic Character state ────────────────────────────────────────────────
 // One character walks on solid ground or cruises through clouds and reacts to launches.
 // Type is chosen based on the nearest planet name.
-var activeCharacter = null;
-var lastCharacterPlanet = null; // track planet to detect changes
+var activeCharacter: SceneCharacter | null = null;
+var lastCharacterPlanet: string | null = null; // track planet to detect changes
 
-function nearbyGuestTarget(awayFrom?) {
+function nearbyGuestTarget(awayFrom?: number) {
   const fieldWidth = Renderer.getWidth() / Renderer.DEFAULT_PPM;
   const left = Math.min(3.8, Math.max(2.8, fieldWidth * .48));
   const right = Math.max(left + .5, Math.min(7.2, fieldWidth * .6));
   const target = left + Math.random() * (right - left);
-  if (Number.isFinite(awayFrom) && Math.abs(target - awayFrom) < Math.min(.75, (right - left) * .4)) {
+  if (awayFrom !== undefined && Number.isFinite(awayFrom) && Math.abs(target - awayFrom) < Math.min(.75, (right - left) * .4)) {
     return awayFrom < (left + right) / 2 ? right : left;
   }
   return target;
@@ -164,12 +170,12 @@ function currentRocketDisplay() {
 
 /** Clear ice for a new hole: past the cannon and launch pad, away from landed
  * shots, a crashed rocket, the other holes and, where it can, the squid. */
-function freshHoleSpot(ch, avoidSquid = true, preferredDirection = 0) {
+function freshHoleSpot(ch: SceneCharacter, avoidSquid = true, preferredDirection = 0) {
   const fieldWidth = Renderer.getWidth() / Renderer.DEFAULT_PPM;
   const left = Math.max(Renderer.CANNON_BASE_X_M, Renderer.TOWER_BASE_X_M || 0) + 1.9;
   const right = Math.max(left + 1.5, fieldWidth - .8);
   const keepClear = [
-    ...ch.holes.map(hole => ({ x: hole.x, gap: 1.4 })),
+    ...(ch.holes ?? []).map(hole => ({ x: hole.x, gap: 1.4 })),
     ...shots.filter(shot => !shot.isGas).map(shot => ({ x: shot.x, gap: .9 })),
     ...(landedRocket ? [{ x: landedRocket.x, gap: 1.6 }] : []),
     ...(avoidSquid ? [{ x: ch.x, gap: 1.2 }] : []),
@@ -185,10 +191,10 @@ function freshHoleSpot(ch, avoidSquid = true, preferredDirection = 0) {
   return best;
 }
 
-function createCharacter(type) {
+function createCharacter(type: string) {
   // Spawn off screen to the right, walk in
   var spawnX = toPhysX(Renderer.getWidth()) * 0.7 + Math.random() * 5;
-  var ch: any = {
+  var ch: SceneCharacter = {
     type: type,
     x: spawnX,
     y: 0,
@@ -235,7 +241,7 @@ function createCharacter(type) {
   return ch;
 }
 
-function startleCharacter(isRocket?) {
+function startleCharacter(isRocket?: boolean) {
   if (!activeCharacter) return;
   if (isWalkingGuest(activeCharacter.type)) {
     beginCrewFlight(activeCharacter,isRocket ? Renderer.TOWER_BASE_X_M : Renderer.CANNON_BASE_X_M,
@@ -278,7 +284,7 @@ function squashCharacter() {
   activeCharacter.bubbleText = null;
 }
 
-function updateCharacter(dt, captionDt = dt) {
+function updateCharacter(dt: number, captionDt = dt) {
   if (!activeCharacter) return;
   var ch = activeCharacter;
   ch.reducedMotion = reducedMotion();
@@ -318,14 +324,14 @@ function updateCharacter(dt, captionDt = dt) {
     const swimDt = viewActive && deck?.run && deck.clock.paused && deck.clock.time < deck.run.duration ? 0 : captionDt;
     ch.cloudMotion = updateCloudGuest(ch.cloudMotion, swimDt, { watching, reducedMotion: reducedMotion() });
     const motion = ch.cloudMotion;
-    const state = watching && motion.phase === 'surfaced' ? 'watching' : cloudGuestActivity(ch.type, motion);
+    const state = watching && motion.phase === 'surfaced' ? 'watching' : cloudGuestActivity(motion.kind, motion);
     ch.watchAim = state === 'watching' ? rocketWatchAim(motion.x, vehicle!, currentPlanetRadius) : undefined;
     ch.watchTarget = state === 'watching' ? { x: vehicle!.x, y: vehicle!.y } : undefined;
     const direction = motion.fleeing
       ? motion.fleeDirection
       : (Math.cos(motion.age * .15) >= 0 ? 1 : -1);
     // Turn about over roughly two-thirds of a second instead of snapping round.
-    const turn = Number.isFinite(ch.turn) && !reducedMotion()
+    const turn = ch.turn !== undefined && Number.isFinite(ch.turn) && !reducedMotion()
       ? ch.turn + Math.max(-3 * swimDt, Math.min(3 * swimDt, direction - ch.turn))
       : direction;
     Object.assign(ch, { x: motion.x, y: motion.y, surfaceAmount: motion.surfaceAmount,
@@ -463,7 +469,7 @@ function playCannonBoom() {
   if (!deck?.sound || isReadingOpen()) return;
   try {
     if (!audioCtx) {
-      audioCtx = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext!)();
     }
     var duration = 0.3;
     var sr = audioCtx.sampleRate;
@@ -479,7 +485,7 @@ function playCannonBoom() {
     filter.frequency.value = 300;
     filter.Q.value = 1;
     var gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.6, audioCtx!.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
     src.connect(filter);
     filter.connect(gain);
@@ -493,7 +499,7 @@ function playClangSound() {
   if (!deck?.sound || isReadingOpen()) return;
   try {
     if (!audioCtx) {
-      audioCtx = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext!)();
     }
     var duration = 0.09;
     var sr = audioCtx.sampleRate;
@@ -523,7 +529,7 @@ function playClangSound() {
 // ── Barrel-change animation ────────────────────────────────────────────────
 
 /** Called when the barrel-length slider changes value */
-function onBarrelChange(newLen) {
+function onBarrelChange(newLen: number) {
   // Don't animate during active flight — just set directly
   if (activeBall) {
     barrelDisplayedLen = newLen;
@@ -572,7 +578,7 @@ function onBarrelChange(newLen) {
   }
 }
 
-function updateBarrelAnimation(dt) {
+function updateBarrelAnimation(dt: number) {
   if (barrelAnimState === 'idle') return;
 
   barrelAnimTimer += dt;
@@ -720,7 +726,7 @@ function getBarrelCrew() {
  *   colour     {string|function}  Colour or colour-factory (default randomGrey)
  *   gravity    {number}   Per-particle gravity term (default 0)
  */
-function createParticlesAt(x, y, opts) {
+function createParticlesAt(x: number, y: number, opts: ParticleOptions) {
   opts = opts || {};
   var count = opts.count || 8;
   var baseAng = opts.baseAngle || 0;
@@ -750,7 +756,7 @@ function createParticlesAt(x, y, opts) {
   }
 }
 
-function createSmokeParticles(tipX, tipY, angleDeg) {
+function createSmokeParticles(tipX: number, tipY: number, angleDeg: number) {
   var rad = angleDeg * Math.PI / 180;
   var count = 12 + Math.floor(Math.random() * 8);
   for (var i = 0; i < count; i++) {
@@ -767,7 +773,7 @@ function createSmokeParticles(tipX, tipY, angleDeg) {
   }
 }
 
-function createImpactParticles(physX, isGas) {
+function createImpactParticles(physX: number, isGas: boolean) {
   var count = 8 + Math.floor(Math.random() * 5);
   for (var i = 0; i < count; i++) {
     var ang = Math.PI * 0.15 + Math.random() * Math.PI * 0.7;
@@ -799,7 +805,7 @@ function randomGasColour() {
   return 'rgb(' + v + ',' + (v-20) + ',' + (v-30) + ')';
 }
 
-function updateParticles(dt) {
+function updateParticles(dt: number) {
   for (var i = particles.length - 1; i >= 0; i--) {
     var p = particles[i];
     p.x += p.vx * dt;
@@ -840,7 +846,7 @@ function clearLandingPresentation() {
 // ── Zoom computation ───────────────────────────────────────────────────────
 let setupWidth = 0, setupHeight = 0;
 function frameCannonSetup() {
-  if (currentMode !== 'cannon' || viewActive || deck.busy) return;
+  if (currentMode !== 'cannon' || viewActive || deck.busy || Renderer.isManualZoom()) return;
   const values = UI.getValues();
   const rebuilding = barrelAnimState !== 'idle';
   const width = Renderer.getWidth(), height = Renderer.getHeight();
@@ -863,7 +869,7 @@ function frameCannonSetup() {
   Renderer.setTargetZoom(zoom);
 }
 
-function computeNeededZoom(rangeMetres, maxHeightMetres, marginFraction?) {
+function computeNeededZoom(rangeMetres: number, maxHeightMetres: number, marginFraction?: number) {
   var cW = cannonSceneWidth(Renderer.getWidth(), Renderer.getHeight());
   var gY = Math.max(1, Renderer.getGroundY() - cannonSceneTop(Renderer.getWidth(), Renderer.getHeight()));
   marginFraction = (typeof marginFraction === 'number')
@@ -899,7 +905,7 @@ async function fire() {
 }
 
 // ── Landing ────────────────────────────────────────────────────────────────
-function handleLanding(ball) {
+function handleLanding(ball: ProjectileState) {
   var landX = ball.x;
   var isGas = Renderer.isCurrentGas();
 
@@ -921,7 +927,7 @@ function handleLanding(ball) {
   squashTimer = 0;
 
   // Freeze readouts
-  var finalState = { x: ball.x, y: 0, vx: 0, vy: 0, mass: ball.mass, time: ball.time };
+  var finalState = { ...ball, y: 0, vx: 0, vy: 0 };
   var finalEnergy = Physics.computeEnergy(finalState, currentGravity);
   UI.updateReadouts(finalState, finalEnergy, launchTME);
 
@@ -998,8 +1004,8 @@ function clearRange() {
 }
 
 // ── Gravity / planet change handler (from UI) ──────────────────────────────
-function onGravityChange(g) {
-  if (!restoring && deck && (viewActive || shots.length)) clearRange();
+function onGravityChange(g: number) {
+  if (!restoring && deck && (viewActive || shots.length || Renderer.isManualZoom())) clearRange();
   currentGravity = g; currentPlanetRadius = resolveEnvironment(g).radius;
   Renderer.setTargetGravity(g);
   UI.highlightNearestPlanet(g);
@@ -1025,8 +1031,9 @@ async function rocketLaunch() {
 }
 
 // ── Rocket landing ────────────────────────────────────────────────────────
-function handleRocketLanding(state) {
+function handleRocketLanding(state: RocketState) {
   const run = deck.run!;
+  if (run.mode !== 'rocket') return;
   createImpactParticles(state.x, Renderer.isCurrentGas());
   impactShockwaveProgress = 0; impactShockwaveX = state.x;
   UI.updateRocketReadouts(state, run.launchX);
@@ -1043,7 +1050,7 @@ function startEngineLoop() {
   if (!deck?.sound || isReadingOpen()) return;
   try {
     if (!audioCtx) {
-      audioCtx = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext!)();
     }
     stopEngineLoop(); // ensure clean start
 
@@ -1077,7 +1084,7 @@ function startEngineLoop() {
 }
 
 function stopEngineLoop() {
-  if (rocketEngineAudio) {
+  if (rocketEngineAudio && audioCtx) {
     try {
       rocketEngineAudio.gain.gain.setValueAtTime(
         rocketEngineAudio.gain.gain.value, audioCtx.currentTime
@@ -1121,7 +1128,7 @@ function playSadTrombone() {
   if (!deck?.sound || isReadingOpen()) return;
   try {
     if (!audioCtx) {
-      audioCtx = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext!)();
     }
     // Classic "wah wah wah wahhh" — four descending tones
     var notes = [392, 370, 349, 294]; // G4, F#4, F4, D4 (approx)
@@ -1149,7 +1156,7 @@ function playSadTrombone() {
 }
 
 // ── Fizzle smoke burst ─────────────────────────────────────────────────────
-function createFizzleSmoke(px, py) {
+function createFizzleSmoke(px: number, py: number) {
   createParticlesAt(px, py, {
     count: 15,
     baseAngle: Math.PI / 2, // upward
@@ -1178,7 +1185,8 @@ async function beginFlight(mode: 'cannon' | 'rocket', config: any, initial: any)
   viewActive = false; activeBall = null; activeRocket = null; stopEngineLoop();
   deck.prepare(); UI.setFlightActive(true);
   try {
-    const run = await recordFlight(mode, config, initial, controller.signal);
+    const run = mode === 'cannon' ? await recordFlight('cannon', config, initial, controller.signal)
+      : await recordFlight('rocket', config, initial, controller.signal);
     if (controller.signal.aborted) return;
     flightBuild = null; deck.load(run);
     if (isReadingOpen()) deck.clock.paused = true;
@@ -1209,11 +1217,11 @@ async function beginFlight(mode: 'cannon' | 'rocket', config: any, initial: any)
   }
 }
 
-function fitRun(run: FlightRecord) {
+function fitRun(run: FlightRecord, reset = true) {
   const baseline = compatibleRuns(run, deck.baseline) ? deck.baseline : null;
   maxRangeMetres = Math.max(1, run.maxX, baseline?.maxX || 0) - Math.min(0, run.minX, baseline?.minX || 0);
   maxHeightMetres = Math.max(2, run.maxHeight, baseline?.maxHeight || 0);
-  Renderer.resetCamera();
+  if (reset) Renderer.resetCamera();
   const margin = run.mode === 'rocket' ? (UI.getRocketZoomSettings().marginPercent / 100) : DEFAULT_CANNON_ZOOM_MARGIN;
   const duration = run.mode === 'rocket' ? UI.getRocketZoomSettings().durationSeconds : DEFAULT_CANNON_VIEW_SECONDS;
   Renderer.setViewTransitionDuration(reducedMotion() ? .01 : duration);
@@ -1221,10 +1229,11 @@ function fitRun(run: FlightRecord) {
   // and the camera gradually reveals altitude while keeping the launch visible.
   Renderer.setTargetZoom(run.mode === 'cannon' ? computeNeededZoom(maxRangeMetres, maxHeightMetres, margin) : Renderer.DEFAULT_PPM);
   if (run.mode === 'cannon' && run.minX < 0) Renderer.setCameraTarget(run.minX - 1);
+  if (run.mode === 'cannon') Renderer.setCannonCamera([...run.samples, ...(baseline?.samples || [])], run.config.planetRadius);
 }
 
 function showLaunchFailure(run: FlightRecord, verticalTw: number) {
-  const world = run.config.environment.name;
+  const world = (run.config.environment ?? resolveEnvironment(run.config.gravity)).name;
   const name = world[0].toUpperCase() + world.slice(1);
   deck.message(`No lift-off on ${name}: upward thrust is ${verticalTw.toFixed(2)}× weight. Open Setup to adjust or reset rocket settings.`, true);
 }
@@ -1237,7 +1246,7 @@ function restoreRun() {
   UI.setFlightActive(false); UI.restoreFlightConfig(run.mode, run.config);
   restoring = false; currentMode = run.mode;
   currentGravity = run.config.gravity; currentPlanetRadius = run.config.planetRadius;
-  Renderer.setTargetGravity(currentGravity); Renderer.setBarrelLength(run.config.barrelLength || 2);
+  Renderer.setTargetGravity(currentGravity); Renderer.setBarrelLength(run.mode === 'cannon' ? run.config.barrelLength || 2 : 2);
   pendingFire = false; barrelAnimState = 'idle';
   launchTME = Physics.computeEnergy(run.samples[0], currentGravity).tme;
   rocketMaxThrust = run.samples[0].thrustMagnitude || 0;
@@ -1245,7 +1254,7 @@ function restoreRun() {
   // Replay starts from ignition, so the previous landing (crater, summary,
   // shockwave) must go the same way a backwards seek clears it.
   clearLandingPresentation();
-  if (run.outcome === 'no-liftoff') {
+  if (run.mode === 'rocket' && run.outcome === 'no-liftoff') {
     const pre = RocketPhysics.computePreLaunch(run.config, run.config.gravity);
     UI.showFizzleMessage(pre.verticalTw ?? pre.tw);
     startFizzlePresentation();
@@ -1262,7 +1271,7 @@ function syncEngineAudio() {
   const shouldPlay = deck?.sound && !isReadingOpen() && viewActive && !deck.clock.paused && activeRocket?.engineOn;
   if (shouldPlay && !rocketEngineAudio) startEngineLoop();
   else if (!shouldPlay) stopEngineLoop();
-  if (shouldPlay && rocketEngineAudio) rocketEngineAudio.gain.gain.setTargetAtTime(.12 * currentRocketDisplay().output, audioCtx.currentTime, .04);
+  if (shouldPlay && rocketEngineAudio && audioCtx) rocketEngineAudio.gain.gain.setTargetAtTime(.12 * currentRocketDisplay().output, audioCtx.currentTime, .04);
 }
 
 function resetCrewReaction() {
@@ -1290,7 +1299,7 @@ function sayCharacter(text: string, seconds = 4) {
 
 function crewReaction(kind: string) {
   if (!activeCharacter) return;
-  activeCharacter.reaction = kind;
+  activeCharacter.reaction = kind === 'coast' || kind === 'apex' || kind === 'impact' || kind === 'escape' || kind === 'fizzle' ? kind : null;
   if (kind !== 'coast') crewReactionUntil = performance.now() / 1000 + 4;
   const now = performance.now() / 1000;
   const count = remarkCounts.get(kind) || 0;
@@ -1312,7 +1321,7 @@ function updateRecordedFlight(dt: number) {
   displayedFlightState = state;
   const stride = Math.max(1, Math.ceil(run.samples.length / 2500));
   trajectoryDots = run.samples.filter((s, i) => s.time <= time && i % stride === 0);
-  if (currentMode === 'cannon') {
+  if (run.mode === 'cannon') {
     activeBall = state; activeRocket = null;
     UI.updateReadouts(state, Physics.computeEnergy(state, currentGravity), launchTME);
   } else {
@@ -1329,6 +1338,11 @@ function updateRecordedFlight(dt: number) {
     Renderer.setViewTransitionDuration(reducedMotion() ? .01 : settings.durationSeconds);
     const horizon = Math.max(.4, settings.durationSeconds * .6) * deck.clock.rate;
     const ahead = Array.from({ length: 5 }, (_, index) => sampleFlight(run, time + horizon * (index + 1) / 5));
+    if (run.orbit && time >= run.orbit.initial.time) {
+      // Once inserted, frame the complete orbit consistently through each lap.
+      // Manual inspection still owns the camera whenever it is selected.
+      ahead.push(...run.samples.filter((point, index) => point.time >= run.orbit!.initial.time && index % 16 === 0));
+    }
     const contact = time >= run.duration && run.outcome === 'impact';
     Renderer.setRocketCamera({
       state: contact ? { ...state, y: .6, theta: 8 } : state, ahead,
@@ -1358,7 +1372,7 @@ function updateRecordedFlight(dt: number) {
       }
       stopEngineLoop();
       UI.setFlightActive(false);
-      if (run.outcome === 'no-liftoff') {
+      if (run.mode === 'rocket' && run.outcome === 'no-liftoff') {
         const pre = RocketPhysics.computePreLaunch(run.config, run.config.gravity);
         showLaunchFailure(run, pre.verticalTw ?? pre.tw);
       } else deck.showResult();
@@ -1374,7 +1388,7 @@ function updateRecordedFlight(dt: number) {
 }
 
 function drawVectors(state: any) {
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d')!;
   const origin = Renderer.toCanvas(state.x, state.y);
   const surfaceAngle = state.planetRadius > 0 ? state.x / state.planetRadius : 0;
   const arrows = [{ label: 'gravity', angle: -Math.PI / 2, color: '#f0d385' }];
@@ -1398,7 +1412,7 @@ function drawVectors(state: any) {
   ctx.restore();
 }
 
-function loop(timestamp) {
+function loop(timestamp: number) {
   if (!lastTime) lastTime = timestamp;
   const elapsed = Math.max(0, (timestamp - lastTime) / 1000);
   var dt = Math.min(elapsed, 0.05);
@@ -1414,6 +1428,8 @@ function loop(timestamp) {
   // Advance the recorded vehicle first so framing uses this frame's position,
   // including seeks and accelerated playback, rather than yesterday's target.
   updateRecordedFlight(elapsed);
+  const scenePoint = viewActive && displayedFlightState ? displayedFlightState : { x: 1.5, y: 0 };
+  Renderer.setFlightFocus(scenePoint);
   if (currentMode === 'rocket') UI.updateRocketFuel(currentRocketDisplay());
   if (currentMode === 'rocket' && !viewActive && !deck.busy) {
     const values = UI.getRocketValues();
@@ -1423,7 +1439,12 @@ function loop(timestamp) {
   }
   // Update renderer world (environment blend + zoom animation), then frame the
   // current rocket projection before anything is painted.
-  Renderer.updateWorld(dt);
+  // Camera easing must use the same elapsed viewing time as playback. Capping
+  // it to the particle timestep strands the camera close to the launch site
+  // on low-frame-rate tablets while Auto advances hours of recorded flight.
+  Renderer.updateWorld(elapsed);
+  zoomControls.update(viewActive ? deck.run : null,
+    { x: currentMode === 'rocket' ? Renderer.TOWER_BASE_X_M : Renderer.CANNON_BASE_X_M, y: 0 });
 
   // ─── Animations ───
   if (currentMode === 'cannon') {
@@ -1435,7 +1456,7 @@ function loop(timestamp) {
   updateImpactAnimations(dt);
   if (activeCharacter) activeCharacter.banter = deck.banter && !activeCharacter.silent;
   const crewBusy=!!flightBuild||pendingFire||(viewActive&&deck.clock.time<deck.run!.duration)
-    ||['flight','approach'].includes(activeCharacter?.flightReaction?.stage);
+    ||['flight','approach'].includes(activeCharacter?.flightReaction?.stage ?? '');
   updateBusiness(businessClock,activeCharacter,elapsed,crewBusy);
   updateCharacter(reducedMotion() ? 0 : dt, elapsed);
   syncCharacterToPlanet();
@@ -1448,7 +1469,7 @@ function loop(timestamp) {
     if (deck.ghost && compatibleRuns(deck.run, deck.baseline) && deck.baseline!.id !== deck.run.id) {
       Renderer.drawGhost(deck.baseline!.samples);
       const ghost = sampleFlight(deck.baseline!, Math.min(deck.clock.time, deck.baseline!.duration));
-      const point = Renderer.toCanvas(ghost.x, ghost.y), ctx = canvas.getContext('2d');
+      const point = Renderer.toCanvas(ghost.x, ghost.y), ctx = canvas.getContext('2d')!;
       ctx.save(); ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 2; ctx.setLineDash([3,3]);
       ctx.beginPath(); ctx.arc(point.x, point.y, 7, 0, Math.PI*2); ctx.stroke(); ctx.restore();
     }
@@ -1560,7 +1581,7 @@ function loop(timestamp) {
     var nzPre = RocketPhysics.computePreLaunch(nzVals, nzGravity);
     var nzProp = RocketPropellants.getById(nzVals.propellantId);
     var nzPh = nzProp ? nzProp.placeholder : { gamma: 1.2, Tc_K: 3000 };
-    var nzCtx = canvas.getContext('2d');
+    var nzCtx = canvas.getContext('2d')!;
     const engineDisplay = currentRocketDisplay();
     const liveNozzle = viewActive && deck.run?.mode === 'rocket' ? displayedFlightState : null;
     const nozzleData = {
@@ -1598,7 +1619,7 @@ function loop(timestamp) {
 }
 
 // Helper: convert canvas px back to physics metres (for off-screen check)
-function toPhysX(canvasPx) {
+function toPhysX(canvasPx: number) {
   var ppm = Renderer.getCurrentPPM();
   if (ppm <= 0) return 9999;
   // cameraX is implicit in toCanvasX: canvas = (world - cameraX) * ppm
@@ -1608,7 +1629,7 @@ function toPhysX(canvasPx) {
 }
 
 // ── Cannon animation ───────────────────────────────────────────────────────
-function updateCannonAnimation(dt) {
+function updateCannonAnimation(dt: number) {
   if (recoilPhase === 1) {
     recoilTimer += dt;
     recoilOffset = Math.min(15, recoilTimer / 0.08 * 15);
@@ -1625,7 +1646,7 @@ function updateCannonAnimation(dt) {
 }
 
 // ── Impact animations ──────────────────────────────────────────────────────
-function updateImpactAnimations(dt) {
+function updateImpactAnimations(dt: number) {
   if (impactShockwaveProgress >= 0 && impactShockwaveProgress < 1) {
     impactShockwaveProgress += dt / 0.3;
     if (impactShockwaveProgress > 1) impactShockwaveProgress = 1.01;
@@ -1635,7 +1656,7 @@ function updateImpactAnimations(dt) {
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 function boot() {
-  canvas = document.getElementById('sim-canvas');
+  canvas = requiredElement('sim-canvas', 'canvas');
   Renderer.init(canvas);
 
   UI.init({
@@ -1677,10 +1698,16 @@ function boot() {
       }
     },
     onRocketLaunch: rocketLaunch,
-    onRocketClear: clearRange
+    onRocketClear: clearRange,
+    onSetupChange: () => { if (viewActive && !setupLocked()) clearRange(); }
   });
 
   deck = new FlightDeck(document.querySelector('.canvas-area')!);
+  zoomControls = new ZoomControls(canvas);
+  zoomControls.onAuto = () => {
+    if (viewActive && deck.run) fitRun(deck.run, false);
+    else { Renderer.resetCamera(); Renderer.resetZoom(); }
+  };
   deck.onSeek = () => {
     if (!deck.run) return;
     if (!viewActive) restoreRun();
@@ -1689,12 +1716,13 @@ function boot() {
     ensureCrewFlight();
   };
   deck.onReplay = () => { restoreRun(); syncEngineAudio(); };
+  deck.onInspect = () => { Renderer.setManualZoom(true); canvas.focus({ preventScroll: true }); };
   // Unlock on the user's gesture, before asynchronous flight recording can
   // lose browser activation. A suspended context used to remain silent.
   const unlockFlightAudio = async () => {
     if (!deck.sound || isReadingOpen()) return;
     try {
-      audioCtx ??= new ((window as any).AudioContext || (window as any).webkitAudioContext)();
+      audioCtx ??= new (window.AudioContext || window.webkitAudioContext!)();
       await audioCtx.resume();
       if (!deck.sound || isReadingOpen()) return;
       if (audioCtx.state !== 'running') throw new Error('Audio is suspended');
@@ -1707,11 +1735,11 @@ function boot() {
   Renderer.resize();
   window.addEventListener('resize', function () {
     Renderer.resize();
-    if (viewActive && deck.run) fitRun(deck.run);
+    if (viewActive && deck.run && !Renderer.isManualZoom()) fitRun(deck.run);
   });
   window.addEventListener('displaychange', () => Renderer.resize());
   new ResizeObserver(() => {
-    if (viewActive && deck.run?.mode === 'cannon') fitRun(deck.run);
+    if (viewActive && deck.run?.mode === 'cannon' && !Renderer.isManualZoom()) fitRun(deck.run);
   }).observe(canvas);
 
   // Sync initial barrel length from slider default

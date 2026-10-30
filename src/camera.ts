@@ -1,3 +1,5 @@
+import { surfacePosition } from './spherical-world.ts';
+
 export interface CannonSetupFraming {
   width: number;
   height: number;
@@ -63,23 +65,21 @@ export function rocketSpriteRadius(ppm: number, epsilon: number) {
 }
 
 export function rocketCameraFraming(request: RocketCameraRequest, width: number, height: number,
-  currentPPM: number, curved: boolean) {
+  currentPPM: number) {
   const area = rocketCameraViewport(width, height);
   const spanX = Math.max(1, area.right - area.left), spanY = Math.max(1, area.bottom - area.top);
   const radiusPerMetre = (rocketSpriteRadius(80, request.epsilon) - 3) / 80;
   const maxPPM = Math.max(1e-8, Math.min(80, (Math.min(spanX, spanY) / 2 - 7) / radiusPerMetre));
   const project = (point: RocketCameraPoint) => {
-    if (!curved || request.radius <= 0) return point;
-    const angle = point.x / request.radius;
+    if (request.radius <= 0) return point;
     // The difference-of-cosines form avoids subtracting planetary radii when
     // the rocket is only centimetres above its launch pad.
-    return { x: (request.radius + point.y) * Math.sin(angle),
-      y: point.y * Math.cos(angle) - 2 * request.radius * Math.sin(angle / 2) ** 2 };
+    return surfacePosition(point.x, point.y, request.radius);
   };
   const points = [{ x: request.launchX, y: 0 }, request.state, ...request.ahead].map(project);
   // Far from the surface, include the planet as context without imposing a
   // zoom floor: escape trajectories can be many planetary radii away.
-  if (curved && request.radius > 0) {
+  if (request.radius > 0) {
     const extent = Math.max(...points.map(p => Math.hypot(p.x, p.y)));
     const progress = Math.max(0, Math.min(1, (extent / request.radius - .5) / .75));
     const reveal = progress * progress * (3 - 2 * progress);

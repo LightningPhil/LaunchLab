@@ -129,14 +129,17 @@
 <input type="range" id="slider-angle" min="5" max="85" value="45" step="1" aria-label="Launch angle">
 </div>
 <div class="slider-row">
-<div class="slider-label-row">
+<div class="slider-label-row force-label-row">
 <span class="slider-label">
 <label for="slider-force">Launch force</label>
 <button type="button" class="tooltip-trigger" aria-label="About Launch force" data-tip="&lt;b&gt;A bigger push&lt;/b&gt;&lt;br&gt;In this ideal launcher, force × barrel length becomes the ball’s kinetic energy. Double the force and the launch speed increases by √2.">?</button>
 </span>
-<output class="slider-value" id="val-force" for="slider-force">500 N</output>
+<select id="force-multiplier" class="force-multiplier" aria-label="Launch force multiplier" title="Multiply the launch force">
+<option value="1">×1</option><option value="10">×10</option><option value="100">×100</option><option value="1000">×1,000</option>
+</select>
+<output class="slider-value" id="val-force" for="slider-force force-multiplier">500 N</output>
 </div>
-<input type="range" id="slider-force" min="50" max="5000" value="500" step="10" aria-label="Launch force">
+<input type="range" id="slider-force" min="100" max="10000" value="500" step="10" aria-label="Launch force">
 </div>
 </div>
 
@@ -186,7 +189,7 @@
 </span>
 <output class="slider-value" id="val-mass" for="slider-mass">5 kg</output>
 </div>
-<input type="range" id="slider-mass" min="0.5" max="20" value="5" step="0.1" aria-label="Ball mass">
+<input type="range" id="slider-mass" min="0.1" max="10" value="5" step="0.1" aria-label="Ball mass">
 </div>
 <div class="slider-row">
 <div class="slider-label-row">
@@ -196,34 +199,144 @@
 </span>
 <output class="slider-value" id="val-barrel" for="slider-barrel">2 m</output>
 </div>
-<input type="range" id="slider-barrel" min="0.5" max="5" value="2" step="0.1" aria-label="Barrel length">
+<input type="range" id="slider-barrel" min="1" max="10" value="2" step="0.1" aria-label="Barrel length">
 </div>
 </div>
 </details>
 </section>
       <section class="rocket-panel" id="rocket-panel" aria-label="Rocket settings" hidden>
+<section class="rocket-steering" id="rocket-guidance-panel" aria-labelledby="steering-title">
+<h2 class="section-header" id="steering-title">Steer your rocket</h2>
+<p class="field-note steering-intro">An orbit is a fall that keeps missing the ground. <b>Climb, build sideways speed, then stop the engine.</b></p>
+<div class="steering-practice">
+<button type="button" class="settings-reset" id="btn-steering-practice">Practise an Earth orbit <span aria-hidden="true">↗</span></button>
+<p class="settings-reset-note" id="steering-practice-note" role="status">Load a capable rocket and an editable turn-and-cutoff plan. Fly it, then change one setting and compare.</p>
+</div>
+<details class="steering-lesson"><summary>How do I steer into orbit?</summary>
+<ol><li><b>Get clear of the ground.</b> Start steeply. Turning too early can send you back into the surface.</li>
+<li><b>Spend thrust going sideways.</b> Turn toward the horizon. Staying upright uses fuel to go high without going around.</li>
+<li><b>Stop at the right time.</b> Too little sideways speed brings you home; too much can send you away. An oval orbit still counts.</li></ol>
+<p class="field-note">Watch “If the engine stopped now” in Flight measurements. Both the lowest and highest points must clear the ground for a closed orbit. Air drag is not modelled.</p>
+</details>
+<div class="slider-row">
+<label for="rocket-guidance">Steering plan</label>
+<select id="rocket-guidance" class="rocket-select" aria-describedby="steering-help">
+<option value="fixed">Hold angle · simple hops</option>
+<option value="pitch_program">Timed turn · plan your orbit</option>
+<option value="prograde_lock">Follow flight path · gravity turn</option>
+<option value="orbit_assist">Orbit assist · automatic</option>
+</select>
+<p class="field-note" id="steering-help">Hold the Launch angle below throughout the engine burn.</p>
+</div>
+<div class="slider-row" id="steering-launch-angle">
+<div class="slider-label-row"><label for="slider-rocket-angle">Launch angle</label>
+<span class="steering-number"><input type="number" id="number-rocket-angle" min="5" max="90" step="0.1" value="85" aria-label="Launch angle, degrees"><span aria-hidden="true">°</span></span></div>
+<output id="val-rocket-angle" for="slider-rocket-angle" hidden>85°</output>
+<input type="range" id="slider-rocket-angle" min="5" max="90" value="85" step="0.1" aria-describedby="steering-angle-key">
+<p class="field-note" id="steering-angle-key">90° = straight up · 0° = along the local horizon</p>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-orbit-sub">
+<div class="orbit-example">
+<button type="button" class="settings-reset" id="btn-orbit-example">Try an Earth orbit <span aria-hidden="true">↗</span></button>
+<p class="settings-reset-note" id="orbit-example-note" role="status">Load the assisted example, then press Lift off for a 200 km orbit.</p>
+</div>
+<div class="slider-row">
+<div class="slider-label-row"><label for="slider-rocket-orbit-altitude">Target orbit altitude</label>
+<output class="slider-value" id="val-rocket-orbit-altitude" for="slider-rocket-orbit-altitude">200 km</output></div>
+<input type="range" id="slider-rocket-orbit-altitude" min="10" max="2000" value="200" step="10" aria-label="Target orbit altitude">
+</div>
+<p class="field-note" id="orbit-plan-note" hidden></p>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-pitch-sub">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-end">Finish pointing at</label>
+</span>
+<span class="steering-number"><input type="number" id="number-rocket-pitch-end" min="-30" max="90" step="0.1" value="45" aria-label="Final angle, degrees"><span aria-hidden="true">°</span></span>
+</div>
+<output id="val-rocket-pitch-end" for="slider-rocket-pitch-end" hidden>45°</output>
+<input type="range" id="slider-rocket-pitch-end" min="-30" max="90" value="45" step="0.1" aria-label="Final angle" aria-describedby="pitch-angle-help">
+<p class="field-note" id="pitch-angle-help">0° builds sideways speed. A small negative angle points below the horizon to reduce an excessive climb.</p>
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-t1">Start turning at</label>
+</span>
+<span class="steering-number"><input type="number" id="number-rocket-pitch-t1" min="0" max="599.9" step="0.1" value="5" aria-label="Start turning at, flight seconds"><span aria-hidden="true">s</span></span>
+</div>
+<input type="range" id="slider-rocket-pitch-t1" min="0" max="599.9" value="5" step="0.1" aria-label="Start turning at">
+<output id="val-rocket-pitch-t1" for="slider-rocket-pitch-t1" hidden>5 s</output>
+</div>
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-pitch-t2">Finish turning at</label>
+</span>
+<span class="steering-number"><input type="number" id="number-rocket-pitch-t2" min="0.1" max="600" step="0.1" value="20" aria-label="Finish turning at, flight seconds"><span aria-hidden="true">s</span></span>
+</div>
+<input type="range" id="slider-rocket-pitch-t2" min="0.1" max="600" value="20" step="0.1" aria-label="Finish turning at">
+<output id="val-rocket-pitch-t2" for="slider-rocket-pitch-t2" hidden>20 s</output>
+</div>
+</div>
+<div class="guidance-sub guidance-sub-hidden" id="guidance-prograde-sub">
+<div class="slider-row">
+<div class="slider-label-row">
+<span class="slider-label">
+<label for="slider-rocket-prograde-vmin">Begin following at speed</label>
+</span>
+<span class="steering-number"><input type="number" id="number-rocket-prograde-vmin" min="1" max="2000" step="1" value="10" aria-label="Begin following at speed, metres per second"><span aria-hidden="true">m/s</span></span>
+</div>
+<output id="val-rocket-prograde-vmin" for="slider-rocket-prograde-vmin" hidden>10 m/s</output>
+<input type="range" id="slider-rocket-prograde-vmin" min="1" max="2000" value="10" step="1" aria-label="Follow above speed">
+<p class="field-note">Give the launch a slight tilt. At exactly 90°, there is no sideways motion to follow. This mode follows the flight path; it does not aim for an orbit.</p>
+</div>
+</div>
+<div class="guidance-sub" id="guidance-cutoff-sub">
+<div class="slider-label-row"><label for="slider-rocket-cutoff">Stop engine at</label>
+<span class="steering-number"><input type="number" id="number-rocket-cutoff" min="0" max="600" step="0.1" value="0" aria-label="Engine cutoff, flight seconds"><span aria-hidden="true">s</span></span></div>
+<input type="range" id="slider-rocket-cutoff" min="0" max="600" step="0.1" value="0" aria-label="Stop engine at" aria-describedby="steering-cutoff-help">
+<div class="steering-adjust" role="group" aria-label="Adjust engine cutoff">
+<button type="button" id="cutoff-earlier" aria-label="Stop half a second earlier">−0.5 s</button>
+<button type="button" id="cutoff-later" aria-label="Stop half a second later">+0.5 s</button>
+<button type="button" id="cutoff-full-tank">Full tank</button>
+</div>
+<p class="field-note" id="steering-cutoff-help">0 = use the whole tank. A timer stops thrust and saves any remaining fuel. It never checks for an orbit.</p>
+</div>
+<figure class="steering-plan" id="steering-plan">
+<figcaption>Your flight plan <span>flight seconds</span></figcaption>
+<svg viewBox="0 0 280 114" role="img" aria-labelledby="steering-diagram-title">
+<title id="steering-diagram-title">Planned engine angle over flight time</title>
+<path class="steering-grid" d="M30 12V90H266M30 66H266"/>
+<text x="3" y="18">90°</text><text x="9" y="70">0°</text>
+<path id="steering-plan-line" d="M30 15H266"/>
+<path id="steering-cutoff-line" d="M266 10V90"/>
+<text x="30" y="106">0 s</text><text id="steering-plan-end" x="266" y="106" text-anchor="end"></text>
+</svg>
+<p id="steering-plan-summary" class="field-note"></p>
+</figure>
+<p class="steering-check field-note" id="steering-plan-check" role="status"></p>
+<aside class="steering-debrief" id="steering-debrief" hidden aria-labelledby="steering-debrief-title">
+<h3 id="steering-debrief-title">Last flight · what to try next</h3>
+<p class="field-note" id="steering-debrief-text"></p>
+</aside>
+</section>
 <button type="button" class="settings-reset" id="btn-rocket-settings-reset">Reset rocket settings <span aria-hidden="true">↺</span></button>
 <p class="settings-reset-note">Restore the starting rocket on your chosen world.</p>
 <div class="slider-group">
 <div class="slider-row">
-<div class="slider-label-row">
+<div class="slider-label-row force-label-row">
 <span class="slider-label">
-<label for="slider-rocket-propmass">Propellant load</label>
-<button type="button" class="tooltip-trigger" aria-label="About Propellant load" data-tip="&lt;b&gt;One more scoop?&lt;/b&gt;&lt;br&gt;More propellant lengthens the burn, but the engine has more mass to lift. Watch both the burn time and thrust-to-weight ratio.">?</button>
+<label for="slider-rocket-propmass">Propellant</label>
+<button type="button" class="tooltip-trigger" aria-label="About Propellant load" data-tip="&lt;b&gt;One more scoop?&lt;/b&gt;&lt;br&gt;Multiply the fuel load from ×1 to ×1,000. More fuel also means more weight: open the workshop and increase throat diameter or chamber pressure if the rocket cannot lift off.">?</button>
 </span>
-<output class="slider-value" id="val-rocket-propmass" for="slider-rocket-propmass">8 kg</output>
+<select id="rocket-propellant-multiplier" class="force-multiplier" aria-label="Propellant load multiplier" title="Multiply the propellant load">
+<option value="1">×1</option><option value="10">×10</option><option value="100">×100</option><option value="1000">×1,000</option>
+</select>
+<output class="slider-value" id="val-rocket-propmass" for="slider-rocket-propmass rocket-propellant-multiplier">8 kg</output>
 </div>
 <input type="range" id="slider-rocket-propmass" min="1" max="5000" value="8" step="1" aria-label="Propellant load">
-</div>
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-angle">Launch angle</label>
-<button type="button" class="tooltip-trigger" aria-label="About Launch angle" data-tip="&lt;b&gt;Up, then over&lt;/b&gt;&lt;br&gt;90° is vertical. An inclined launch needs enough upward thrust to lift the vehicle. The guidance setting controls its direction after launch.">?</button>
-</span>
-<output class="slider-value" id="val-rocket-angle" for="slider-rocket-angle">85°</output>
-</div>
-<input type="range" id="slider-rocket-angle" min="5" max="90" value="85" step="1" aria-label="Launch angle">
 </div>
 </div>
 <p class="tw-warning tw-warning-hidden" id="tw-warning" role="status">Not enough upward thrust for immediate lift-off. Try less mass, more thrust, or a steeper launch.</p>
@@ -252,6 +365,14 @@
 <span class="readout-value " id="read-rocket-live-tw">—</span>
 <span class="readout-label">Total impulse</span>
 <span class="readout-value " id="read-rocket-impulse">—</span>
+</div>
+<div id="rocket-orbit-readout" hidden>
+<p class="engine-state" id="rocket-orbit-caption">Unpowered path</p>
+<div class="readout-grid">
+<span class="readout-label">Lowest point</span><span class="readout-value" id="read-rocket-periapsis">—</span>
+<span class="readout-label">Highest point</span><span class="readout-value" id="read-rocket-apoapsis">—</span>
+</div>
+<p class="field-note" id="rocket-orbit-note">This path returns to the surface.</p>
 </div>
 <p class="engine-state" id="read-rocket-engine" role="status">Tanks ready</p>
 <div class="prop-gauge-container" id="prop-gauge" role="progressbar" aria-label="Propellant remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
@@ -350,7 +471,7 @@
 </span>
 <output class="slider-value" id="val-rocket-dt" for="slider-rocket-dt">15 mm</output>
 </div>
-<input type="range" id="slider-rocket-dt" min="5" max="200" value="15" step="1" aria-label="Throat diameter">
+<input type="range" id="slider-rocket-dt" min="5" max="2000" value="15" step="1" aria-label="Throat diameter">
 </div>
 <div class="slider-row">
 <div class="slider-label-row">
@@ -398,60 +519,7 @@
 </div>
 </div>
 </details>
-<details class="lab-details">
-<summary>Guidance</summary>
-<div class="details-content">
-<div class="slider-row">
-<label for="rocket-guidance">Steering</label>
-<select id="rocket-guidance" class="rocket-select">
-<option value="fixed">Hold launch angle</option>
-<option value="pitch_program">Timed pitch</option>
-<option value="prograde_lock">Follow velocity</option>
-</select>
-<p class="field-note">The rocket’s nose shows thrust direction. Its velocity arrow shows where it is travelling.</p>
-</div>
-<div class="guidance-sub guidance-sub-hidden" id="guidance-pitch-sub">
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-pitch-end">Final angle</label>
-</span>
-<output class="slider-value" id="val-rocket-pitch-end" for="slider-rocket-pitch-end">45°</output>
-</div>
-<input type="range" id="slider-rocket-pitch-end" min="0" max="89" value="45" step="1" aria-label="Final angle">
-</div>
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-pitch-t1">Start turning at</label>
-</span>
-<output class="slider-value" id="val-rocket-pitch-t1" for="slider-rocket-pitch-t1">5 s</output>
-</div>
-<input type="range" id="slider-rocket-pitch-t1" min="0" max="60" value="5" step="0.5" aria-label="Start turning at">
-</div>
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-pitch-t2">Finish turning at</label>
-</span>
-<output class="slider-value" id="val-rocket-pitch-t2" for="slider-rocket-pitch-t2">20 s</output>
-</div>
-<input type="range" id="slider-rocket-pitch-t2" min="1" max="120" value="20" step="0.5" aria-label="Finish turning at">
-</div>
-</div>
-<div class="guidance-sub guidance-sub-hidden" id="guidance-prograde-sub">
-<div class="slider-row">
-<div class="slider-label-row">
-<span class="slider-label">
-<label for="slider-rocket-prograde-vmin">Follow above speed</label>
-</span>
-<output class="slider-value" id="val-rocket-prograde-vmin" for="slider-rocket-prograde-vmin">10 m/s</output>
-</div>
-<input type="range" id="slider-rocket-prograde-vmin" min="1" max="100" value="10" step="1" aria-label="Follow above speed">
-</div>
-</div>
-</div>
-</details>
+
 </section>
       <footer class="lab-footer">Launch. Wonder. Tweak. Repeat.<span>Small experiments, wonderfully big questions.</span>
 </footer>

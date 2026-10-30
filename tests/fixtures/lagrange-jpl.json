@@ -1,0 +1,115 @@
+{
+  "source": "https://ssd-api.jpl.nasa.gov/periodic_orbits.api",
+  "retrieved": "2026-10-19",
+  "note": "Independent normalized equilibria from JPL. The catalogue uses its own fixed mass ratios and distance units; validation uses those source ratios directly.",
+  "systems": [
+    {
+      "id": "earth-moon",
+      "url": "https://ssd-api.jpl.nasa.gov/periodic_orbits.api?sys=earth-moon&family=halo&libr=1&branch=N&periodmax=0.1",
+      "system": {
+        "L4": [
+          "0.487849414390376",
+          "0.866025403784439",
+          "0.0"
+        ],
+        "L1": [
+          "0.836915125772357",
+          "0.0",
+          "0.0"
+        ],
+        "lunit": 389703.264829278,
+        "L2": [
+          "1.15568216544488",
+          "0.0",
+          "0.0"
+        ],
+        "L5": [
+          "0.487849414390376",
+          "-0.866025403784439",
+          "0.0"
+        ],
+        "name": "Earth-Moon",
+        "mass_ratio": "1.215058560962404e-02",
+        "tunit": 382981.289129055,
+        "L3": [
+          "-1.00506264581028",
+          "0.0",
+          "0.0"
+        ],
+        "radius_secondary": 1737.1
+      }
+    },
+    {
+      "id": "sun-earth",
+      "url": "https://ssd-api.jpl.nasa.gov/periodic_orbits.api?sys=sun-earth&family=halo&libr=1&branch=N&periodmax=0.1",
+      "system": {
+        "radius_secondary": 6378,
+        "L3": [
+          "-1.00000127258333",
+          "0.0",
+          "0.0"
+        ],
+        "tunit": 5022635.34820215,
+        "L5": [
+          "0.4999969458",
+          "-0.866025403784439",
+          "0.0"
+        ],
+        "name": "Sun-Earth",
+        "L2": [
+          "1.01009043578556",
+          "0.0",
+          "0.0"
+        ],
+        "mass_ratio": "3.054200000000000e-06",
+        "lunit": 149597870.7,
+        "L1": [
+          "0.989970922056916",
+          "0.0",
+          "0.0"
+        ],
+        "L4": [
+          "0.4999969458",
+          "0.866025403784439",
+          "0.0"
+        ]
+      }
+    },
+    {
+      "id": "sun-mars",
+      "url": "https://ssd-api.jpl.nasa.gov/periodic_orbits.api?sys=sun-mars&family=halo&libr=1&branch=N&periodmax=0.1",
+      "system": {
+        "L2": [
+          "1.00476310673934",
+          "0.0",
+          "0.0"
+        ],
+        "radius_secondary": 3389.5,
+        "tunit": 8253621.92588451,
+        "lunit": 208321281.703548,
+        "L5": [
+          "0.4999996772845",
+          "-0.866025403784439",
+          "0.0"
+        ],
+        "L4": [
+          "0.4999996772845",
+          "0.866025403784439",
+          "0.0"
+        ],
+        "L1": [
+          "0.995251326846093",
+          "0.0",
+          "0.0"
+        ],
+        "name": "Sun-Mars",
+        "mass_ratio": "3.227154996101724e-07",
+        "L3": [
+          "-1.00000013446479",
+          "0.0",
+          "0.0"
+        ]
+      }
+    }
+  ]
+}

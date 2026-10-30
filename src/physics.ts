@@ -1,4 +1,5 @@
 import { classifyTrajectory } from './environment.ts';
+import { radialGravity } from './spherical-world.ts';
 
 /**
  * ============================================================================
@@ -25,7 +26,7 @@ import { classifyTrajectory } from './environment.ts';
 var BARREL_LENGTH = 2.0; // metres — tunable, kept here as engine default
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function degToRad(deg) {
+function degToRad(deg: number) {
   return deg * Math.PI / 180;
 }
 
@@ -38,7 +39,7 @@ function degToRad(deg) {
  * @param {number} barrelLength Optional override (default 2.0 m)
  * @returns {number} Launch speed in m/s
  */
-function computeLaunchVelocity(force, mass, barrelLength) {
+function computeLaunchVelocity(force: number, mass: number, barrelLength?: number) {
   var d = (typeof barrelLength === 'number') ? barrelLength : BARREL_LENGTH;
   if (!Number.isFinite(mass) || mass <= 0) return 0;
 
@@ -65,7 +66,7 @@ function computeLaunchVelocity(force, mass, barrelLength) {
  * @param {number} [planetRadius] Planet radius in metres (enables radial gravity)
  * @returns {object} Projectile state
  */
-function createProjectile(x0, y0, speed, angleDeg, mass, planetRadius?) {
+function createProjectile(x0: number, y0: number, speed: number, angleDeg: number, mass: number, planetRadius?: number) {
   if (![x0, y0, speed, angleDeg, mass].every(Number.isFinite) || mass <= 0 || speed < 0 || y0 < 0) {
     throw new RangeError('Projectile position, speed, angle and mass must be finite; mass must be positive.');
   }
@@ -129,27 +130,23 @@ function createProjectile(x0, y0, speed, angleDeg, mass, planetRadius?) {
  * @param {number} gravity Surface gravity magnitude m/s² (positive number)
  * @returns {object} New state
  */
-function advanceProjectile(state, dt, gravity) {
+export type ProjectileState = ReturnType<typeof createProjectile>;
+
+function advanceProjectile(state: ProjectileState, dt: number, gravity: number) {
   var R = state.planetRadius;
 
   if (R > 0) {
     // ── Radial gravity integration (world-space) ──
-    // mu = g_surface * R^2  (gravitational parameter)
-    var mu = gravity * R * R;
 
     var wx = state.wx;
     var wy = state.wy;
     var wvx = state.wvx;
     var wvy = state.wvy;
 
-    // Distance from planet centre
-    var r = Math.sqrt(wx * wx + wy * wy);
-    if (r < 1) r = 1; // safety
-
     // Gravitational acceleration: a = -mu / r^2, directed toward origin
-    var aFactor = -mu / (r * r * r); // divides by r^3 to also normalise direction
-    var ax = aFactor * wx;
-    var ay = aFactor * wy;
+    var acceleration = radialGravity(wx, wy, R, gravity);
+    var ax = acceleration.x;
+    var ay = acceleration.y;
 
     // Velocity Verlet integration (second-order accurate)
     // Half-step velocity
@@ -163,9 +160,9 @@ function advanceProjectile(state, dt, gravity) {
     // Recompute acceleration at new position
     var nr = Math.sqrt(nwx * nwx + nwy * nwy);
     if (nr < 1) nr = 1;
-    var naFactor = -mu / (nr * nr * nr);
-    var nax = naFactor * nwx;
-    var nay = naFactor * nwy;
+    var nextAcceleration = radialGravity(nwx, nwy, R, gravity);
+    var nax = nextAcceleration.x;
+    var nay = nextAcceleration.y;
 
     // Full-step velocity
     var nvx = hvx + nax * dt * 0.5;
@@ -219,7 +216,7 @@ function advanceProjectile(state, dt, gravity) {
 /** Canonical contact and apex events, refined inside the same integration step.
  * Readouts retain incoming velocity separately from the stopped contact state.
  */
-function stepProjectile(state, dt, gravity) {
+function stepProjectile(state: ProjectileState, dt: number, gravity: number): ProjectileState {
   if (!Number.isFinite(dt) || dt <= 0 || state.outcome === 'impact') return { ...state };
   const g = Number.isFinite(gravity) ? Math.max(0, gravity) : 0;
   let next = { ...state, ...advanceProjectile(state, dt, g) };
@@ -256,7 +253,7 @@ function stepProjectile(state, dt, gravity) {
  * Compute kinetic, potential, and total mechanical energy.
  * When planetRadius is available, uses proper gravitational PE.
  */
-function computeEnergy(state, gravity) {
+function computeEnergy(state: Pick<ProjectileState, 'vx' | 'vy' | 'mass' | 'y' | 'planetRadius'>, gravity: number) {
   var speedSq = state.vx * state.vx + state.vy * state.vy;
   var ke = 0.5 * state.mass * speedSq;
   // Surface-relative inverse-square potential: mu*m*(1/R - 1/(R+h)).
@@ -273,7 +270,7 @@ function computeEnergy(state, gravity) {
  * @param {object} state
  * @returns {number} speed in m/s
  */
-function speed(state) {
+function speed(state: { vx: number; vy: number }) {
   return Math.sqrt(state.vx * state.vx + state.vy * state.vy);
 }
 
@@ -290,7 +287,7 @@ function speed(state) {
  * @param {number} barrelLength Barrel length (metres)
  * @param {number} [planetRadius] Planet radius (metres) — enables radial gravity
  */
-function predictTrajectory(force, mass, angleDeg, gravity, startX, startY, barrelLength, planetRadius?) {
+function predictTrajectory(force: number, mass: number, angleDeg: number, gravity: number, startX: number, startY: number, barrelLength: number, planetRadius?: number) {
   var spd = computeLaunchVelocity(force, mass, barrelLength);
   var R = (typeof planetRadius === 'number' && planetRadius > 0) ? planetRadius : 0;
 

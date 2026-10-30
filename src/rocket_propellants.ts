@@ -175,12 +175,14 @@ var REGISTRY = [
 ];
 
 // ── Quick ID lookup map ────────────────────────────────────────────────────
-var byId = Object.create(null);
+export type Propellant = typeof REGISTRY[number];
+
+var byId: Record<string, Propellant | undefined> = Object.create(null);
 for (var i = 0; i < REGISTRY.length; i++) {
   byId[REGISTRY[i].id] = REGISTRY[i];
 }
 
-function getById(id) {
+function getById(id: string) {
   return byId[id] || null;
 }
 
@@ -211,7 +213,7 @@ var R_UNIVERSAL = 8314.46; // J/(kmol·K)
 /**
  * Compute ideal c* from gamma, molecular weight (g/mol), and Tc.
  */
-function idealCStar(gamma, molWt, Tc) {
+function idealCStar(gamma: number, molWt: number, Tc: number) {
   var g = gamma;
   var R = R_UNIVERSAL / (molWt); // J/(kg·K)  — note: molWt in g/mol → R_u/molWt
   // Gamma function: gamma * (2/(gamma+1))^((gamma+1)/(gamma-1))
@@ -221,7 +223,7 @@ function idealCStar(gamma, molWt, Tc) {
 }
 
 /** Area ratio A/A* for a Mach number. */
-function epsilonFromMach(gamma, mach) {
+function epsilonFromMach(gamma: number, mach: number) {
   var g = gamma;
   var M = Math.max(1.000001, mach);
   var term = (2 / (g + 1)) * (1 + 0.5 * (g - 1) * M * M);
@@ -236,17 +238,17 @@ function epsilonFromMach(gamma, mach) {
  *
  * Uses Newton iteration.
  */
-function exitMachFromEpsilon(gamma, epsilon) {
+function exitMachFromEpsilon(gamma: number, epsilon: number) {
   var g = gamma;
   var gp1 = g + 1;
   var gm1 = g - 1;
   var exp = gp1 / (2 * gm1);
 
   // Area-Mach function: A/A*(M)
-  function areaMach(M) { return epsilonFromMach(g, M); }
+  function areaMach(M: number) { return epsilonFromMach(g, M); }
 
   // Derivative d(A/A*)/dM
-  function dAreaMach(M) {
+  function dAreaMach(M: number) {
     var t = 1 + 0.5 * gm1 * M * M;
     var A = areaMach(M);
     return A * (-1 / M + gm1 * M * exp / t);
@@ -270,7 +272,7 @@ function exitMachFromEpsilon(gamma, epsilon) {
  * Compute pe/pc from exit Mach and gamma.
  *   pe/pc = (1 + (gamma-1)/2 * Me^2)^(-gamma/(gamma-1))
  */
-function exitPressureRatio(gamma, Me) {
+function exitPressureRatio(gamma: number, Me: number) {
   var g = gamma;
   return Math.pow(1 + 0.5 * (g - 1) * Me * Me, -g / (g - 1));
 }
@@ -282,7 +284,7 @@ function exitPressureRatio(gamma, Me) {
  *            * (1 - (pe/pc)^((g-1)/g)) )
  *        + epsilon * (pe - pa) / pc
  */
-function idealCf(gamma, epsilon, pe_pc, Pa_Pa, Pc_Pa) {
+function idealCf(gamma: number, epsilon: number, pe_pc: number, Pa_Pa: number, Pc_Pa: number) {
   var g = gamma;
   var gm1 = g - 1;
   var gp1 = g + 1;
@@ -299,7 +301,7 @@ function idealCf(gamma, epsilon, pe_pc, Pa_Pa, Pc_Pa) {
  * conditions (MR=anchor, Pc=100 bar, eps=20, Pa=0) the resulting Isp
  * matches the textbook anchor Isp_vac.
  */
-function computeCalibrationFactor(prop) {
+function computeCalibrationFactor(prop: Propellant) {
   var ph = prop.placeholder;
   var anchor = prop.anchor;
   var Pc_Pa = 100e5;  // 100 bar
@@ -317,7 +319,7 @@ function computeCalibrationFactor(prop) {
 }
 
 // Pre-compute calibration factors
-var calibrationFactors = Object.create(null);
+var calibrationFactors: Record<string, number> = Object.create(null);
 for (var j = 0; j < REGISTRY.length; j++) {
   calibrationFactors[REGISTRY[j].id] = computeCalibrationFactor(REGISTRY[j]);
 }
@@ -344,7 +346,7 @@ const nozzleCache = new Map<string, {
   gamma: number;
 }>();
 
-function lookupPerformance(id, MR, Pc_Pa, epsilon, Pa_Pa) {
+function lookupPerformance(id: string, MR: number, Pc_Pa: number, epsilon: number, Pa_Pa: number) {
   var prop = byId[id];
   if (!prop || !Number.isFinite(Pc_Pa) || Pc_Pa <= 0 ||
       !Number.isFinite(epsilon) || epsilon < 1 || !Number.isFinite(Pa_Pa) || Pa_Pa < 0) {

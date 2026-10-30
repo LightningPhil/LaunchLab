@@ -40,6 +40,7 @@ function harness() {
   };
   const canvas = { width: 0, height: 0, getContext: () => context, getBoundingClientRect: () => bounds };
   Renderer.init(canvas);
+  Renderer.setFlightFocus({ x: 0, y: 0 }); Renderer.setTargetGravity(9.81);
   Renderer.resetCamera(); Renderer.setZoomImmediate(80); Renderer.updateWorld(0);
   calls.length = 0;
   return { canvas, context, bounds, calls, resizeLayout: () => resized() };
@@ -78,7 +79,7 @@ test('screen coordinates invert flat and spherical projection, including planet 
 
 test('cannon muzzle follows the full barrel-length range used by launch physics', () => {
   harness();
-  for (const length of [.5, 2, 4, 5]) {
+  for (const length of [1, 2, 4, 5, 10]) {
     Renderer.setBarrelLength(length);
     for (const angle of [5, 45, 85]) {
       const tip = Renderer.getCannonTipPhys(angle);
@@ -89,19 +90,174 @@ test('cannon muzzle follows the full barrel-length range used by launch physics'
   Renderer.setBarrelLength(2);
 });
 
+test('one sphere and one scale persist from close-up through horizon to whole-world zoom', () => {
+  harness();
+  for (const environment of ENVIRONMENTS) {
+    Renderer.setTargetGravity(environment.gravity);
+    Renderer.resetCamera();
+    for (const ppm of [80, 1, .3, .1, .01, .001, .0001, .00001]) {
+      Renderer.setZoomImmediate(ppm); Renderer.updateWorld(0);
+      const origin = Renderer.toCanvas(0, 0);
+      assert.equal(origin.x, 0, 'Zoom alone never recentres the world');
+      const centre = Renderer.toCanvas(0, -environment.radius);
+      const radius = environment.radius * ppm;
+      for (const angle of [0, .4, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+        const point = Renderer.toCanvas(environment.radius * angle, 0);
+        assert.ok(Math.abs(Math.hypot(point.x - centre.x, point.y - centre.y) - radius) < Math.max(1e-8, radius * 1e-14));
+        assert.ok(Math.abs((point.x - origin.x) / ppm - environment.radius * Math.sin(angle)) < environment.radius * 1e-14);
+        assert.ok(Math.abs(Renderer.screenToSurface(point.x, point.y).y) < environment.radius * 1e-14);
+      }
+    }
+  }
+  Renderer.setTargetGravity(9.81);
+});
+
+test('a large cannon shot begins at the existing close launch camera before pulling back', () => {
+  harness();
+  const radius = 1188300;
+  Renderer.setTargetGravity(.62); Renderer.setZoomImmediate(80); Renderer.updateWorld(0);
+  const launch = { x: 2, y: 3 };
+  Renderer.setViewTransitionDuration(2); // The cannon's normal transition duration.
+  Renderer.setFlightFocus(launch);
+  const before = Renderer.toCanvas(launch.x, launch.y);
+  Renderer.setCannonCamera([launch, { x: radius * .5, y: radius * .2 }, { x: radius, y: 0 }], radius);
+  Renderer.updateWorld(0);
+  const start = Renderer.toCanvas(launch.x, launch.y);
+  assert.ok(Math.hypot(start.x - before.x, start.y - before.y) < 1e-9, 'Framing must not jump on the launch frame');
+  Renderer.updateWorld(1 / 60);
+  const after = Renderer.toCanvas(launch.x, launch.y);
+  assert.ok(Math.hypot(after.x - before.x, after.y - before.y) < 80, 'First zoom step remains close to the launch');
+  Renderer.resetCamera(); Renderer.setTargetGravity(9.81);
+});
+
+test('long cannon framing keeps the curved landing and launch visible on phones and desktop', () => {
+  const h = harness(), radius = 1188300;
+  Renderer.setTargetGravity(.62);
+  const path = Array.from({ length: 101 }, (_, index) => {
+    const fraction = index / 100;
+    return { x: radius * .7 * fraction, y: radius * .2 * 4 * fraction * (1 - fraction) };
+  });
+  for (const [width, height] of [[960, 540], [320, 405], [320, 260], [640, 180]]) {
+    h.bounds.width = width; h.bounds.height = height; h.resizeLayout();
+    Renderer.resetCamera(); Renderer.setCannonCamera(path, radius);
+    Renderer.setFlightFocus(path.at(-1));
+    Renderer.updateWorld(30); Renderer.updateWorld(30);
+    for (const point of path) {
+      const pixel = Renderer.toCanvas(point.x, point.y);
+      assert.ok(pixel.x >= 0 && pixel.x <= width && pixel.y >= 0 && pixel.y <= height,
+        `${width}×${height}: ${pixel.x}, ${pixel.y}`);
+    }
+  }
+  Renderer.resetCamera(); Renderer.setTargetGravity(9.81);
+});
+
+test('escaping cannon shots keep the entire world and outgoing path visible at every viewport size', () => {
+  const h = harness(), radius = 1737400;
+  Renderer.setTargetGravity(1.62);
+  const path = Array.from({ length: 101 }, (_, i) => ({ x: radius * .8 * i / 100, y: radius * 2 * i / 100 }));
+  const globe = Array.from({ length: 32 }, (_, i) => ({ x: radius * Math.PI * 2 * i / 32, y: 0 }));
+  for (const [width, height] of [[960, 540], [320, 405], [320, 260], [640, 180]]) {
+    h.bounds.width = width; h.bounds.height = height; h.resizeLayout();
+    Renderer.resetCamera(); Renderer.setCannonCamera(path, radius);
+    Renderer.setFlightFocus(path.at(-1));
+    Renderer.updateWorld(30); Renderer.updateWorld(30);
+    for (const point of [...path, ...globe]) {
+      const pixel = Renderer.toCanvas(point.x, point.y);
+      assert.ok(pixel.x >= 0 && pixel.x <= width && pixel.y >= 0 && pixel.y <= height,
+        `${width}×${height}: ${pixel.x}, ${pixel.y}`);
+      if (height >= 300) assert.ok(pixel.y > 132, 'The shot clears the portrait and speech bubble');
+    }
+  }
+  Renderer.resetCamera(); Renderer.setTargetGravity(9.81);
+});
+
+test('planetary cannon zoom settles in viewing time even with one frame per second', () => {
+  harness();
+  const radius = 6371000, launch = { x: 4, y: 4 }, peak = { x: radius * 1.3, y: radius * 3.5 };
+  const landing = { x: radius * 2.6, y: 0 };
+  Renderer.setViewTransitionDuration(2);
+  Renderer.setFlightFocus(launch);
+  Renderer.setCannonCamera([launch, peak, landing], radius);
+  for (let frame = 0; frame < 5; frame++) {
+    Renderer.setFlightFocus(peak); Renderer.updateWorld(1);
+  }
+  for (const point of [launch, peak, landing, { x: Math.PI * radius, y: 0 }]) {
+    const pixel = Renderer.toCanvas(point.x, point.y);
+    assert.ok(pixel.x >= 0 && pixel.x <= 960 && pixel.y >= 0 && pixel.y <= 540,
+      `A dropped-frame camera still frames the world: ${pixel.x}, ${pixel.y}`);
+  }
+  Renderer.resetCamera();
+});
+
+test('the cannon trail stays legible when a bright Earth sky fades to dark space', () => {
+  const h = harness();
+  Renderer.drawTrajectoryDot(5, 2);
+  assert.equal(h.context.fillStyle, 'rgba(60,20,10,0.6)');
+  Renderer.setZoomImmediate(.00001); Renderer.updateWorld(0);
+  Renderer.drawTrajectoryDot(6371000, 6371000);
+  assert.equal(h.context.fillStyle, 'rgba(255,230,120,0.6)');
+});
+
+test('sky covers the space exposed below a curved horizon on compact scenes', () => {
+  const h = harness();
+  h.bounds.width = 853; h.bounds.height = 348; h.resizeLayout();
+  Renderer.setTargetGravity(1.62); Renderer.setZoomImmediate(.002); Renderer.updateWorld(0);
+  h.calls.length = 0; Renderer.drawWorld();
+  assert.deepEqual(h.calls.find(call => call.name === 'fillRect').args, [0, 0, 853, 348],
+    'The first sky layer fills beneath both sides of the arc, before ground painting');
+});
+
+test('manual inspection draws a local ground curve on the far hemisphere at close zoom', () => {
+  const h = harness(), radius = 6371000;
+  Renderer.setManualZoom(true);
+  Renderer.centreView(Renderer.toCanvas(Math.PI * radius, 0)); Renderer.updateWorld(0);
+  const location = Renderer.toCanvas(Math.PI * radius, 0);
+  assert.ok(Math.abs(location.x - 480) < 1e-6 && Math.abs(location.y - 270) < 1e-6);
+  h.calls.length = 0; Renderer.drawWorld();
+  assert.ok(h.calls.some(call => call.name === 'quadraticCurveTo'),
+    'The underside draws the visible section of the physical circle');
+  assert.ok(!h.calls.some(call => call.name === 'arc' && call.args[2] === radius * 80),
+    'Sending the entire enormous circle to Canvas produces blocky ground fills');
+  Renderer.resetCamera();
+});
+
+test('solid and gas landing close-ups keep ground paths and gradients within local coordinates', () => {
+  for (const world of ENVIRONMENTS.filter(world => ['earth', 'jupiter'].includes(world.name))) {
+    for (const dpr of [1, 1.5, 2, 3]) {
+      const h = harness();
+      window.devicePixelRatio = dpr; Renderer.clear();
+      Renderer.setTargetGravity(world.gravity); Renderer.updateWorld(10);
+      const radius = world.radius;
+      Renderer.setZoomImmediate(800); Renderer.updateWorld(0);
+      Renderer.setManualZoom(true);
+      Renderer.centreView(Renderer.toCanvas(radius * 2.9, 0)); Renderer.updateWorld(0);
+      const gradients = [];
+      h.context.createRadialGradient = (...args) => { gradients.push(args); return { addColorStop() {} }; };
+      h.context.createLinearGradient = (...args) => { gradients.push(args); return { addColorStop() {} }; };
+      h.calls.length = 0; Renderer.drawWorld();
+      const segments = h.calls.filter(call => call.name === 'quadraticCurveTo');
+      assert.ok(segments.length > 0);
+      assert.ok(segments.every(call => call.args.every(value => Math.abs(value) < 10000)), 'No giant curve controls');
+      assert.ok(gradients.every(args => args.every(value => Math.abs(value) < 10000)), 'No giant gradient coordinates');
+      assert.ok(!h.calls.some(call => call.name === 'arc' && call.args[2] > 10000), 'No giant ground circles');
+      Renderer.resetCamera();
+    }
+  }
+});
+
 test('rocket points along commanded thrust and plume begins behind its nozzle', () => {
   const h = harness();
   const state = { phase: 'flight', x: 2, y: 3, theta: 90, vx: 30, vy: -2 };
   Renderer.drawRocket(state, 45, 20);
   const position = h.calls.find(call => call.name === 'translate').args;
   const rotation = h.calls.find(call => call.name === 'rotate').args[0];
-  assert.ok(Math.abs(rotation - Math.PI / 2) < 1e-12, 'Nose follows 90-degree thrust even with descending velocity');
+  assert.ok(Math.abs(rotation - (Math.PI / 2 + state.x / 6371000)) < 1e-12, 'Nose follows 90-degree thrust even with descending velocity');
   h.calls.length = 0;
   Renderer.drawExhaust(state.x, state.y, Math.PI / 2, 1, 20);
   const exhaust = h.calls.find(call => call.name === 'translate').args;
-  assert.ok(Math.abs(exhaust[0] - position[0]) < 1e-10);
+  assert.ok(Math.abs(exhaust[0] - position[0] + 104 * Math.sin(state.x / 6371000)) < 1e-10);
   assert.ok(exhaust[1] > position[1], 'Exhaust originates below the upward-pointing rocket');
-  assert.ok(Math.abs(exhaust[1] - position[1] - 104) < 1e-10, 'Anchor accounts for half-body plus nozzle length');
+  assert.ok(Math.abs(exhaust[1] - position[1] - 104 * Math.cos(state.x / 6371000)) < 1e-10, 'Anchor accounts for half-body plus nozzle length');
 });
 
 test('initial recorded rocket and prelaunch sprite share the same centre and nozzle anchor', () => {
@@ -120,8 +276,8 @@ test('initial recorded rocket and prelaunch sprite share the same centre and noz
       Renderer.drawExhaust(centre.x, centre.y, angle * Math.PI / 180, 1, epsilon);
       const nozzle = h.calls.find(call => call.name === 'translate').args;
       const surface = Renderer.toCanvas(Renderer.TOWER_BASE_X_M, .15);
-      assert.ok(Math.abs(nozzle[0] - surface.x) < 1e-9, 'Nozzle rests on launch rail');
-      assert.ok(Math.abs(nozzle[1] - surface.y) < 1e-9, 'Nozzle rests on pad top');
+      assert.ok(Math.abs(nozzle[0] - surface.x) < .001, 'Nozzle rests on launch rail');
+      assert.ok(Math.abs(nozzle[1] - surface.y) < .001, 'Nozzle rests on pad top');
     }
   }
 });

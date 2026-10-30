@@ -6,6 +6,8 @@
  * UTC approximates dynamical time here; this is an educational Keplerian
  * ephemeris, not an N-body integrator or a navigation ephemeris.
  */
+import { CATALOGUE_MOONS, ASTEROIDS, KUIPER_BODIES } from './orrery-catalogue.ts';
+export { ASTEROIDS, KUIPER_BODIES } from './orrery-catalogue.ts';
 export const DAY_MS = 86400000;
 export const YEAR_DAYS = 365.25;
 export const J2000 = Date.UTC(2000, 0, 1, 12);
@@ -19,7 +21,12 @@ export interface World {
   id: string; name: string; colour: string; diameterKm: number;
   displayDiameter: number; tilt: number; spinHours: number;
   elements?: Six; rates?: Six; corrections?: [number,number,number,number];
-  satellite?: {parent:string;distanceKm:number;periodDays:number;phase:number;inclination:number};
+  kind?: 'asteroid'|'dwarf-planet'|'kuiper-object';
+  region?: 'asteroids'|'kuiper'; spinIllustrative?:boolean;
+  kepler?: {epochJD:number;meanMotion:number};
+  satellite?: {parent:string;distanceKm:number;periodDays:number;epochJD:number;
+    eccentricity:number;meanAnomaly:number;argumentOfPeriapsis:number;
+    inclination:number;ascendingNode:number;frame:string;poleRaDec?:[number,number]};
 }
 export const WORLDS: World[] = [
   { id:'sun', name:'Sun', colour:'#ffd17b', diameterKm:1392700, displayDiameter:3, tilt:7.25, spinHours:609.12 },
@@ -42,27 +49,46 @@ export const WORLDS: World[] = [
   { id:'pluto', name:'Pluto', colour:'#c7aa99', diameterKm:2376, displayDiameter:.82, tilt:119.5, spinHours:153.3,
     elements:[39.48686035,.24885238,17.14104260,238.96535011,224.09702598,110.30167986], rates:[.00449751,.00006016,.00000501,145.18042903,-.00968827,-.00809981], corrections:[-.01262724,0,0,0] },
 ];
-// Representative circular satellite orbits. Distances/periods: JPL satellite
-// mean elements (ssd.jpl.nasa.gov/sats/elem/); phases/planes are illustrative.
-// These do not claim the positional accuracy of a lunar/satellite ephemeris.
-export const MOONS:World[]=[
-  {id:'moon',name:'Moon',colour:'#c5c6c8',diameterKm:3474.8,displayDiameter:.32,tilt:5.16,spinHours:27.322*24,
-    satellite:{parent:'earth',distanceKm:384400,periodDays:27.322,phase:2.1,inclination:5.16}},
-  {id:'ganymede',name:'Ganymede',colour:'#b6aea3',diameterKm:5262.4,displayDiameter:.4,tilt:3.3,spinHours:7.155588*24,
-    satellite:{parent:'jupiter',distanceKm:1070400,periodDays:7.155588,phase:4.3,inclination:3.3}},
-  {id:'charon',name:'Charon',colour:'#a59c95',diameterKm:1212,displayDiameter:.3,tilt:119.5,spinHours:6.387*24,
-    satellite:{parent:'pluto',distanceKm:19600,periodDays:6.387,phase:.8,inclination:119.5}},
+export const ALL_MOONS=CATALOGUE_MOONS;
+export const MOONS=ALL_MOONS.filter(m=>['moon','ganymede','charon'].includes(m.id));
+export const moonsFor=(expanded=false)=>expanded?ALL_MOONS:MOONS;
+export const isExtraWorld=(id:string)=>[...ASTEROIDS,...KUIPER_BODIES].some(w=>w.id===id)||ALL_MOONS.some(w=>w.id===id)&&!MOONS.some(w=>w.id===id);
+export const worldsFor=(expanded=false)=>[
+  ...WORLDS.flatMap(world=>[world,...moonsFor(expanded).filter(m=>m.satellite!.parent===world.id)]),
+  ...(expanded?[...ASTEROIDS,...KUIPER_BODIES]:[]),
 ];
-export function moonOrbitRadius(world:World,t:number):number {
-  const parent=WORLDS.find(w=>w.id===world.satellite!.parent)!;
-  return mix(world.satellite!.distanceKm/AU_KM,parent.displayDiameter/2+.26+world.displayDiameter/2,t);
+export const jdToMs=(jd:number)=>J2000+(jd-2451545)*DAY_MS;
+const OBLIQUITY=23.439291111*RAD;
+export function eclipticPole([raDeg,decDeg]:[number,number]):[number,number,number] {
+  const ra=raDeg*RAD,dec=decDeg*RAD;
+  const y=Math.sin(ra)*Math.cos(dec),z=Math.sin(dec);
+  return [Math.cos(ra)*Math.cos(dec),Math.cos(OBLIQUITY)*y+Math.sin(OBLIQUITY)*z,-Math.sin(OBLIQUITY)*y+Math.cos(OBLIQUITY)*z];
 }
-/** Moon translation uses its orbital period, independently of surface spin. */
-export function satelliteOffset(world:World,ms:number,t:number):[number,number,number] {
-  const orbit=world.satellite!;
-  const phase=((daysSinceJ2000(ms)/orbit.periodDays)%1)*TAU+orbit.phase;
-  const radius=moonOrbitRadius(world,t),inc=orbit.inclination*Math.PI/180;
-  return [Math.cos(phase)*radius*Math.cos(inc),Math.cos(phase)*radius*Math.sin(inc),-Math.sin(phase)*radius];
+/** JPL nodes in a local plane start at that plane's ascending node on the
+ * ICRF equator, rather than the ecliptic equinox. Build that basis explicitly. */
+export function satellitePositionAt(world:World,ms:number,eccentricAnomaly?:number):[number,number,number] {
+  const s=world.satellite!,days=(ms-jdToMs(s.epochJD))/DAY_MS;
+  const peri=s.argumentOfPeriapsis+s.ascendingNode;
+  const local=positionFromElements([s.distanceKm/AU_KM,s.eccentricity,s.inclination,
+    s.meanAnomaly+360*((days/s.periodDays)%1)+peri,peri,s.ascendingNode],eccentricAnomaly);
+  if(!s.poleRaDec)return local;
+  const [ra,dec]=s.poleRaDec.map(v=>v*RAD);
+  const pole=[Math.cos(ra)*Math.cos(dec),Math.sin(ra)*Math.cos(dec),Math.sin(dec)];
+  const x=[-Math.sin(ra),Math.cos(ra),0]; // equator cross pole
+  const y=[-Math.sin(dec)*Math.cos(ra),-Math.sin(dec)*Math.sin(ra),Math.cos(dec)]; // pole cross x
+  const eq=pole.map((v,i)=>x[i]*local[0]+y[i]*local[1]+v*local[2]);
+  return [eq[0],Math.cos(OBLIQUITY)*eq[1]+Math.sin(OBLIQUITY)*eq[2],-Math.sin(OBLIQUITY)*eq[1]+Math.cos(OBLIQUITY)*eq[2]];
+}
+export function moonOrbitRadius(world:World,t:number,expanded=false):number {
+  const parent=WORLDS.find(w=>w.id===world.satellite!.parent)!;
+  const lane=expanded?MOON_LANES[world.id]:parent.displayDiameter/2+.26+world.displayDiameter/2;
+  return mix(world.satellite!.distanceKm/AU_KM,lane,t);
+}
+/** Display-only circularisation leaves the Keplerian angular phase unchanged. */
+export function satelliteOffset(world:World,ms:number,t:number,expanded=false,eccentricAnomaly?:number):[number,number,number] {
+  const real=satellitePositionAt(world,ms,eccentricAnomaly),r=Math.hypot(...real);
+  const scale=mix(r,moonOrbitRadius(world,1,expanded),t)/r;
+  return [real[0]*scale,real[2]*scale,-real[1]*scale];
 }
 export const BELTS = [
   { id:'asteroids', name:'Asteroid belt', inner:2.1, outer:3.3, halfWidth:.45, colour:'#ae9b7d', count:4200 },
@@ -77,6 +103,11 @@ export function solveKepler(mean:number,e:number):number {
   return E;
 }
 export function elementsAt(world:World, ms:number):Six {
+  if(world.kepler){
+    const e=[...world.elements!] as Six;
+    e[3]+=world.kepler.meanMotion*(ms-jdToMs(world.kepler.epochJD))/DAY_MS;
+    return e;
+  }
   const t=daysSinceJ2000(ms)/36525;
   const elements=world.elements!.map((v,i)=>v+world.rates![i]*t) as Six;
   if(world.corrections){
@@ -105,22 +136,55 @@ export const spinAt = (world:World,ms:number) => ((daysSinceJ2000(ms)*24/world.s
 export const diameterAt = (world:World,t:number) => mix(world.diameterKm/AU_KM,world.displayDiameter,t);
 export const NORMAL_GAP = .8;
 const order = ['sun','mercury','venus','earth','mars','asteroids','jupiter','saturn','uranus','neptune','pluto','kuiper'];
-export function footprint(id:string):number {
-  const belt=BELTS.find(b=>b.id===id);
-  if(belt)return belt.halfWidth;
-  const w=WORLDS.find(w=>w.id===id)!;
-  return Math.max(w.displayDiameter*.5*(id==='saturn'?2.3:1),...MOONS.filter(m=>m.satellite!.parent===id).map(m=>moonOrbitRadius(m,1)+m.displayDiameter/2));
+const planetFootprint=(w:World)=>w.displayDiameter*.5*(w.id==='saturn'?2.3:1);
+export const MOON_GAP=.18;
+export const MOON_LANES:Record<string,number>={};
+for(const parent of WORLDS){
+  let edge=planetFootprint(parent);
+  for(const moon of ALL_MOONS.filter(m=>m.satellite!.parent===parent.id).sort((a,b)=>a.satellite!.distanceKm-b.satellite!.distanceKm)){
+    MOON_LANES[moon.id]=edge+MOON_GAP+moon.displayDiameter/2;
+    edge=MOON_LANES[moon.id]+moon.displayDiameter/2;
+  }
 }
-export const NORMAL_RADII:Record<string,number>={sun:0};
-for(let i=1;i<order.length;i++)NORMAL_RADII[order[i]]=NORMAL_RADII[order[i-1]]+footprint(order[i-1])+NORMAL_GAP+footprint(order[i]);
+export const ASTEROID_GAP=.08;
+export const KUIPER_GAP=.12;
+const expandedBeltWidths:Record<string,number>={},beltOffsets:Record<string,{region:string;offset:number}>={};
+for(const [region,bodies,gap] of [['asteroids',ASTEROIDS,ASTEROID_GAP],['kuiper',KUIPER_BODIES,KUIPER_GAP]] as const){
+  const halfWidth=(bodies.reduce((sum,w)=>sum+w.displayDiameter,0)+gap*(bodies.length-1))/2;
+  expandedBeltWidths[region]=halfWidth;
+  let edge=-halfWidth;
+  for(const world of [...bodies].sort((a,b)=>a.elements![0]-b.elements![0])){
+    beltOffsets[world.id]={region,offset:edge+world.displayDiameter/2};
+    edge+=world.displayDiameter+gap;
+  }
+}
+export const EXPANDED_BELT_HALF_WIDTH=expandedBeltWidths.asteroids;
+export const beltHalfWidth=(id:string,expanded=false)=>expanded?expandedBeltWidths[id]:BELTS.find(b=>b.id===id)!.halfWidth;
+export function footprint(id:string,expanded=false):number {
+  const belt=BELTS.find(b=>b.id===id);
+  if(belt)return beltHalfWidth(id,expanded);
+  const w=WORLDS.find(w=>w.id===id)!;
+  return Math.max(planetFootprint(w),...moonsFor(expanded).filter(m=>m.satellite!.parent===id).map(m=>moonOrbitRadius(m,1,expanded)+m.displayDiameter/2));
+}
+function makeRadii(expanded:boolean){
+  const radii:Record<string,number>={sun:0};
+  for(let i=1;i<order.length;i++)radii[order[i]]=radii[order[i-1]]+footprint(order[i-1],expanded)+NORMAL_GAP+footprint(order[i],expanded);
+  return radii;
+}
+export const NORMAL_RADII=makeRadii(false),EXPANDED_RADII=makeRadii(true);
+export const normalRadii=(expanded=false)=>expanded?EXPANDED_RADII:NORMAL_RADII;
+export const smallBodyOrbitRadius=(id:string)=>EXPANDED_RADII[beltOffsets[id].region]+beltOffsets[id].offset;
+export const asteroidOrbitRadius=smallBodyOrbitRadius;
 /** Display-only distortion: retain true longitude/latitude and date-driven phase. */
-export function displayPosition(real:[number,number,number],id:string,t:number):[number,number,number] {
+export function displayPosition(real:[number,number,number],id:string,t:number,expanded=false):[number,number,number] {
   const r=Math.hypot(...real); if(!r)return [0,0,0];
-  const scale=mix(r,NORMAL_RADII[id],t)/r;
+  const lane=id in beltOffsets?smallBodyOrbitRadius(id):normalRadii(expanded)[id];
+  const scale=mix(r,lane,t)/r;
   // Right-handed ecliptic -> Three.js Y-up. +Y is ecliptic north.
   return [real[0]*scale,real[2]*scale,-real[1]*scale];
 }
-export const outerRadius = (t:number) => mix(52,NORMAL_RADII.kuiper+BELTS[1].halfWidth,t);
+const expandedPhysicalRadius=Math.max(52,...KUIPER_BODIES.map(w=>w.elements![0]*(1+w.elements![1])+w.diameterKm/AU_KM/2));
+export const outerRadius = (t:number,expanded=false) => mix(expanded?expandedPhysicalRadius:52,normalRadii(expanded).kuiper+beltHalfWidth('kuiper',expanded),t);
 export function advanceTime(ms:number,elapsedSeconds:number,yearsPerMinute:number):number {
   return Math.max(MIN_DATE,Math.min(MAX_DATE,ms+elapsedSeconds*yearsPerMinute*YEAR_DAYS*DAY_MS/60));
 }

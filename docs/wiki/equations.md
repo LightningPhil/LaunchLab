@@ -1,6 +1,6 @@
 # Equations in the educational wiki
 
-`src/wiki/reading.ts` renders LaTeX with bundled KaTeX and fonts. Both the hosted build and portable HTML work without a CDN. Visual HTML is paired with MathML for assistive technology. Prose is escaped; HTML commands in equations are not trusted.
+`src/wiki/reading.ts` renders LaTeX with bundled KaTeX and fonts. The web build works without a CDN. Visual HTML is paired with MathML for assistive technology. Prose is escaped; HTML commands in equations are not trusted.
 
 Use `String.raw` for text containing inline maths:
 

@@ -32,6 +32,13 @@ function autoProfile(run: FlightRecord): AutoProfile {
  * Short flights stay in real time; long flights start at their required speed.
  * Ignition, burnout, guidance changes and impact do not reset that speed. */
 export function automaticRate(run: FlightRecord, time: number): number {
+  if (run.orbit) {
+    // Give the ascent eight viewing seconds and a complete circuit twelve.
+    // Continuing another lap keeps its pace; extending the observation must
+    // not speed up the earlier launch or change its recorded physics.
+    return time < run.orbit.initial.time ? Math.max(1, run.orbit.initial.time / 8)
+      : Math.max(1, run.orbit.period / 12);
+  }
   if (run.duration <= MAX_AUTO_VIEW_SECONDS) return 1;
   const profile = autoProfile(run), progress = clamp(time / run.duration, 0, 1);
   const rise = .25 * smootherstep(progress / .18);
