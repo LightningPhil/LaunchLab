@@ -59,7 +59,7 @@ Regenerate with Python, NumPy and SciPy available:
 
 ```
 python tools/generate-lagrange-reference.py
-node --test tests/lagrange-accuracy.test.mjs
+node --test tests/lagrange-accuracy.test.ts
 ```
 
 Normal project tests use the checked-in numbers and require only Node. Checks also cover exact initial units, the analytic unperturbed equilibrium over twelve orbits, continuous-output oscillator accuracy, physical surface contact, independently located departure maxima, bounded finite execution, and stopping a long sensitive forecast at its numerical agreement limit.

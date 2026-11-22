@@ -155,7 +155,7 @@ export function reactionPool(kind: string, environment: Environment): readonly s
   if (!Object.prototype.hasOwnProperty.call(EVENT_REMARKS, kind)) return undefined;
   const lines = EVENT_REMARKS[kind];
   if (kind === 'launch' && environment.surfacePressure > 0) return [...lines, ...NOISY_LAUNCH];
-  if (kind === 'impact' && !environment.interpolated) {
+  if (kind === 'impact') {
     return [...lines, ...(environment.isGas ? CLOUD_CONTACT : SOLID_CONTACT)];
   }
   return lines;
@@ -175,7 +175,7 @@ export class CharacterRemarks {
   }
 
   next(environment: Environment): string {
-    const lines = !environment.interpolated && Object.prototype.hasOwnProperty.call(PLANET_REMARKS, environment.name)
+    const lines = Object.prototype.hasOwnProperty.call(PLANET_REMARKS, environment.name)
       ? PLANET_REMARKS[environment.name] : undefined;
     return this.draw(lines ? environment.name : 'generic', lines ?? GENERIC_REMARKS);
   }
@@ -184,7 +184,7 @@ export class CharacterRemarks {
     const lines = reactionPool(kind, environment);
     if (!lines) return undefined;
     const policy = kind === 'launch' ? (environment.surfacePressure > 0 ? 'air' : 'vacuum')
-      : kind === 'impact' ? (environment.interpolated ? 'custom' : environment.isGas ? 'cloud' : 'solid') : 'any';
+      : kind === 'impact' ? (environment.isGas ? 'cloud' : 'solid') : 'any';
     return this.draw('event:' + kind + ':' + policy, lines);
   }
 

@@ -5,6 +5,7 @@ import { RocketPhysics } from '../src/rocket_physics.ts';
 import { RocketPropellants } from '../src/rocket_propellants.ts';
 import { resolveEnvironment, pressureAtAltitude, classifyTrajectory } from '../src/environment.ts';
 
+import { recordFlight } from '../src/flight.ts';
 import type { RocketConfig } from '../src/rocket_physics.ts';
 
 const config = {
@@ -129,7 +130,6 @@ test('shared environments preserve radius interpolation and use altitude-depende
   near(pressureAtAltitude(earth, earth.scaleHeight), 101325 / Math.E, 1e-10);
   const middle = resolveEnvironment((1.62 + 3.7) / 2);
   near(middle.radius, (1737400 + 2439700) / 2, 1e-8);
-  assert.equal(middle.interpolated, true);
   const sea = RocketPhysics.computePreLaunch({ ...config, environment: earth }, 9.81);
   const vacuum = RocketPhysics.computePreLaunch({ ...config, environment: moon }, 1.62);
   assert.ok(vacuum.thrust > sea.thrust);
@@ -230,29 +230,43 @@ test('downrange remains continuous when a flight crosses the back of the planet'
   near(rocketNext.x, cannonNext.x, 1e-7);
 });
 
-test('short rocket preset converges across integration steps with matching prediction/live configuration', () => {
-  const setup = { ...config, environment: resolveEnvironment(9.81) };
-  const standard = RocketPhysics.predictTrajectory(setup, 9.81, { dt: 1 / 120 });
-  const finer = RocketPhysics.predictTrajectory(setup, 9.81, { dt: 1 / 240 });
-  assert.equal(standard.status, 'impact');
-  assert.equal(standard.complete, true);
-  assert.ok(standard.time < 40 && standard.time > 30);
-  near(standard.time, finer.time, 0.00001);
+test('short rocket preset converges across integration steps and matches canonical recorded flight', async () => {
+  const environment = resolveEnvironment(9.81);
+  const setup = { ...config, gravity: 9.81, planetRadius: environment.radius, environment };
+  const guidance = RocketPhysics.buildGuidance(setup);
+  const integrate = (dt: number) => {
+    let state = RocketPhysics.createRocketState(setup);
+    let maxHeight = 0;
+    while (state.outcome === 'flight') {
+      state = RocketPhysics.stepRocket(state, dt, 9.81, guidance);
+      maxHeight = Math.max(maxHeight, state.y, state.apexHeight ?? 0);
+    }
+    return { state, maxHeight };
+  };
+  const standard = integrate(1 / 120);
+  const finer = integrate(1 / 240);
+  assert.equal(standard.state.outcome, 'impact');
+  assert.ok(standard.state.time < 40 && standard.state.time > 30);
+  near(standard.state.time, finer.state.time, 0.00001);
   near(standard.maxHeight, finer.maxHeight, 0.001);
-  let live = RocketPhysics.createRocketState(setup);
-  while (live.outcome === 'flight') live = RocketPhysics.stepRocket(live, 1 / 120, 9.81, RocketPhysics.buildGuidance(setup));
-  assert.deepEqual(live, standard.finalState);
+  const recorded = await recordFlight('rocket', setup, RocketPhysics.createRocketState(setup));
+  assert.equal(recorded.outcome, 'impact');
+  near(recorded.duration, standard.state.time, 1e-6);
 });
 
-test('bounded prediction labels an unfinished ascent as a limit, not an apogee or a landing', () => {
-  const result = RocketPhysics.predictTrajectory({ ...config, environment: resolveEnvironment(9.81) }, 9.81, { maxTime: 1 });
-  assert.equal(result.complete, false);
-  assert.equal(result.status, 'limit');
-  assert.equal(result.apexTime, null);
-  assert.equal(result.apexHeight, null);
-  assert.equal(result.landingX, null);
+test('bounded recording labels an unfinished ascent or zero-gravity shot as a limit, not an apogee or landing', async () => {
+  const environment = resolveEnvironment(9.81);
+  const setup = { ...config, gravity: 9.81, planetRadius: environment.radius, environment };
+  const result = await recordFlight('rocket', setup, RocketPhysics.createRocketState(setup), undefined, { maxTime: 1 });
+  const final = result.samples.at(-1)!;
+  assert.equal(result.outcome, 'limit');
+  assert.equal(final.apexTime, null);
+  assert.equal(final.apexHeight, null);
+  assert.equal(final.impactTime, null);
   assert.ok(Number.isFinite(result.maxHeight));
-  const zeroGravity = Physics.predictTrajectory(500, 5, 45, 0, 0, 2, 2);
-  assert.equal(zeroGravity.complete, false);
-  assert.ok(Number.isFinite(zeroGravity.flightTime));
+  const spd = Physics.computeLaunchVelocity(500, 5, 2);
+  const zeroGravity = await recordFlight('cannon', { angle: 45, force: 500, mass: 5, barrelLength: 2, gravity: 0, planetRadius: 0 },
+    Physics.createProjectile(0, 2, spd, 45, 5, 0), undefined, { maxTime: 1 });
+  assert.equal(zeroGravity.outcome, 'limit');
+  assert.ok(Number.isFinite(zeroGravity.duration));
 });

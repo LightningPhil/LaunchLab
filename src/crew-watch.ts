@@ -1,7 +1,4 @@
-/** Presentation-time launch reaction, independent of accelerated flight time. */
-export const ROCKET_STARTLE_SECONDS = 1.8;
-export const ROCKET_FLEE_SECONDS = 10;
-
+/** Gaze sequences and tangent-plane optics bearings for world visitors. */
 export interface WatchAim {
   /** Screen/world horizontal facing; zero looks directly at the viewer. */
   yaw: -1 | 0 | 1;
@@ -40,10 +37,6 @@ export function observationAim(pose: ObserverPose): WatchAim | undefined {
   return pose.watchAim || gazeAim(pose) || { yaw, elevation: yaw ? .25 : 0 };
 }
 
-export function canWatchRocket(type: string) {
-  return ['golfer', 'spaceman', 'robot', 'icerobot', 'alien'].includes(type);
-}
-
 /** Bearing in the observer's local tangent plane, including curved worlds. */
 export function rocketWatchAim(observerX: number, rocket: { x: number; y: number }, radius = 0): WatchAim {
   let dx = rocket.x - observerX, dy = rocket.y - 1;
@@ -54,46 +47,4 @@ export function rocketWatchAim(observerX: number, rocket: { x: number; y: number
   }
   return { yaw: dx < 0 ? -1 : 1,
     elevation: Math.max(-.2, Math.min(1.05, Math.atan2(dy, Math.abs(dx)))) };
-}
-
-export function beginRocketWatch(ch: any, launchX: number, alreadyWatching = false) {
-  if (!canWatchRocket(ch.type) || ch.state === 'squashed') return;
-  const direction = ch.x >= launchX ? 1 : -1;
-  ch.rocketWatch = { elapsed: alreadyWatching ? ROCKET_STARTLE_SECONDS + ROCKET_FLEE_SECONDS : 0,
-    originX: ch.x - (alreadyWatching ? direction * ch.speed * 3.5 * ROCKET_FLEE_SECONDS : 0), direction };
-  ch.state = alreadyWatching ? 'watching' : 'rocket_startled';
-  ch.stateTimer = 0;
-  ch.visible = true;
-  delete ch.watchAim;
-  delete ch.watchTarget;
-}
-
-export function clearRocketWatch(ch: any) {
-  if (!ch?.rocketWatch) return;
-  delete ch.rocketWatch;
-  delete ch.watchAim;
-  delete ch.watchTarget;
-  if (['watching', 'rocket_startled', 'running_away'].includes(ch.state)) {
-    ch.state = 'idle'; ch.stateTimer = 0; ch.visible = true;
-  }
-}
-
-/** Returns true while this controller owns the character's launch performance. */
-export function updateRocketWatch(ch: any, dt: number, rocket: { x: number; y: number } | null,
-  radius = 0, paused = false, reducedMotion = false) {
-  const watch = ch.rocketWatch;
-  if (!watch) return false;
-  if (!rocket || ch.state === 'squashed') { clearRocketWatch(ch); return false; }
-  if (!paused) watch.elapsed += Math.max(0, Number.isFinite(dt) ? dt : 0);
-  const runTime = Math.max(0, watch.elapsed - ROCKET_STARTLE_SECONDS);
-  const watching = runTime >= ROCKET_FLEE_SECONDS;
-  ch.x = watch.originX + watch.direction * ch.speed * 3.5 * Math.min(ROCKET_FLEE_SECONDS, runTime);
-  ch.state = watching ? 'watching' : watch.elapsed < ROCKET_STARTLE_SECONDS ? 'rocket_startled' : 'running_away';
-  ch.stateTimer = watching ? runTime - ROCKET_FLEE_SECONDS : watch.elapsed < ROCKET_STARTLE_SECONDS ? watch.elapsed : runTime;
-  ch.direction = watch.direction;
-  ch.visible = true;
-  ch.reducedMotion = reducedMotion;
-  ch.watchAim = watching ? rocketWatchAim(ch.x, rocket, radius) : undefined;
-  ch.watchTarget = watching ? { x: rocket.x, y: rocket.y } : undefined;
-  return true;
 }

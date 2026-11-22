@@ -18,7 +18,6 @@ import { radialGravity } from './spherical-world.ts';
  *   stepProjectile(state, dt, gravity)                → new state, with refined
  *                                                       apex / contact events
  *   computeEnergy(state, gravity)                     → { ke, pe, tme }
- *   predictTrajectory(...)                            → range / height summary
  * ============================================================================
  */
 
@@ -274,81 +273,6 @@ function speed(state: { vx: number; vy: number }) {
   return Math.sqrt(state.vx * state.vx + state.vy * state.vy);
 }
 
-/**
- * Predict full trajectory numerically (for zoom planning).
- * Returns range, max height, flight time.
- *
- * @param {number} force        Cannon force (N)
- * @param {number} mass         Ball mass (kg)
- * @param {number} angleDeg     Barrel angle (degrees)
- * @param {number} gravity      Surface gravity (m/s²)
- * @param {number} startX       Launch x (surface metres)
- * @param {number} startY       Launch y (altitude metres)
- * @param {number} barrelLength Barrel length (metres)
- * @param {number} [planetRadius] Planet radius (metres) — enables radial gravity
- */
-function predictTrajectory(force: number, mass: number, angleDeg: number, gravity: number, startX: number, startY: number, barrelLength: number, planetRadius?: number) {
-  var spd = computeLaunchVelocity(force, mass, barrelLength);
-  var R = (typeof planetRadius === 'number' && planetRadius > 0) ? planetRadius : 0;
-
-  if (R > 0) {
-    // Numeric integration with spherical gravity
-    var st = createProjectile(startX, startY, spd, angleDeg, mass, R);
-    var dt = 1 / 120;
-    var maxTime = 3600;        // 1 hour max
-    var maxHeight = startY;
-    var t = 0;
-
-    while (t < maxTime) {
-      st = stepProjectile(st, dt, gravity);
-      maxHeight = Math.max(maxHeight, st.y, st.apexHeight ?? 0);
-      if (st.outcome === 'impact') break;
-      const classification = classifyTrajectory(st, gravity);
-      if (classification.kind === 'orbit' || classification.kind === 'escape') break;
-      t += dt;
-    }
-
-    const status = st.outcome === 'impact' ? 'impact' : classifyTrajectory(st, gravity).kind;
-    return {
-      range: Math.abs(st.x),
-      maxHeight: maxHeight,
-      flightTime: st.time,
-      launchSpeed: spd,
-      complete: status === 'impact' || status === 'orbit' || status === 'escape',
-      status: status === 'returning' ? 'limit' : status,
-      apexTime: st.apexTime,
-      apexHeight: st.apexHeight
-    };
-  }
-
-  // Flat-earth analytic fallback
-  var rad = degToRad(angleDeg);
-  var vx = spd * Math.cos(rad);
-  var vy = spd * Math.sin(rad);
-
-  if (!(gravity > 0)) {
-    return { range: startX, maxHeight: startY, flightTime: 0, launchSpeed: spd,
-      complete: false, status: 'unbounded', apexTime: null, apexHeight: null };
-  }
-
-  var disc = vy * vy + 2 * gravity * startY;
-  var flightTime = (vy + Math.sqrt(Math.max(0, disc))) / gravity;
-  var range = startX + vx * flightTime;
-  var vyUp = Math.max(0, vy);
-  var maxHeight = startY + (vyUp * vyUp) / (2 * gravity);
-
-  return {
-    range: range,
-    maxHeight: maxHeight,
-    flightTime: flightTime,
-    launchSpeed: spd,
-    complete: true,
-    status: 'impact',
-    apexTime: Math.max(0, vy / gravity),
-    apexHeight: maxHeight
-  };
-}
-
 // ── Expose namespace ──────────────────────────────────────────────────────
 export const Physics = {
   BARREL_LENGTH: BARREL_LENGTH,
@@ -356,7 +280,6 @@ export const Physics = {
   createProjectile: createProjectile,
   stepProjectile: stepProjectile,
   computeEnergy: computeEnergy,
-  predictTrajectory: predictTrajectory,
   classifyTrajectory: classifyTrajectory,
   speed: speed,
   degToRad: degToRad

@@ -1,11 +1,20 @@
-import { classifyTrajectory } from './environment.ts';
+import { classifyTrajectory, type CoastBody } from './environment.ts';
 
 const TAU = 2 * Math.PI;
 const wrap = (angle: number) => angle - TAU * Math.floor((angle + Math.PI) / TAU);
 
+export type OrbitalCoast<S extends CoastBody = CoastBody> = {
+  initial: S;
+  mu: number; a: number; b: number; q: number; e: number;
+  ux: number; uy: number; direction: number; h: number;
+  initialE: number; initialM: number; initialTrue: number;
+  period: number; periapsisAltitude: number; apoapsisAltitude: number;
+  endTime: number;
+};
+
 /** Elliptic two-body motion after engine cutoff. The orbital plane is the
  * existing flight plane; no camera coordinates enter the physical solution. */
-export function planOrbitalCoast(initial: any, gravity: number) {
+export function planOrbitalCoast<S extends CoastBody>(initial: S, gravity: number): OrbitalCoast<S> | null {
   const info = classifyTrajectory(initial, gravity);
   if (initial.engineOn || initial.outcome !== 'flight' || info.kind !== 'orbit') return null;
   const R = initial.planetRadius, mu = gravity * R * R;
@@ -32,7 +41,6 @@ export function planOrbitalCoast(initial: any, gravity: number) {
     periapsisAltitude: q - R, apoapsisAltitude: a * (1 + e) - R,
     endTime: initial.time + period };
 }
-export type OrbitalCoast = NonNullable<ReturnType<typeof planOrbitalCoast>>;
 
 function eccentricAnomaly(mean: number, e: number) {
   let lo = -Math.PI, hi = Math.PI, anomaly = mean;
@@ -47,7 +55,7 @@ function eccentricAnomaly(mean: number, e: number) {
   return anomaly;
 }
 
-export function sampleOrbitalCoast(plan: OrbitalCoast, time: number) {
+export function sampleOrbitalCoast<S extends CoastBody>(plan: OrbitalCoast<S>, time: number): S {
   const start = plan.initial;
   if (time <= start.time) return { ...start };
   const mean = plan.initialM + (time - start.time) / plan.period * TAU;
@@ -67,14 +75,14 @@ export function sampleOrbitalCoast(plan: OrbitalCoast, time: number) {
 
 /** Uniform eccentric-anomaly sampling resolves the fast turn near periapsis
  * without making recordings proportional to their duration. */
-export function orbitalSampleTimes(plan: OrbitalCoast, lap = 0) {
+export function orbitalSampleTimes<S extends CoastBody>(plan: OrbitalCoast<S>, lap = 0) {
   return Array.from({ length: 721 }, (_, i) => {
     const E = plan.initialE + TAU * i / 720;
     return plan.initial.time + (lap + (E - plan.e * Math.sin(E) - plan.initialM) / TAU) * plan.period;
   });
 }
 
-export function orbitalEvents(plan: OrbitalCoast) {
+export function orbitalEvents<S extends CoastBody>(plan: OrbitalCoast<S>) {
   if (plan.e < 1e-6) return [];
   return [[0, 'periapsis', 'Lowest orbital point'], [Math.PI, 'apoapsis', 'Highest orbital point']].map(([mean, kind, label]) => ({
     time: plan.initial.time + (((Number(mean) - plan.initialM) % TAU + TAU) % TAU) / TAU * plan.period,

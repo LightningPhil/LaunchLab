@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader native",
-    "test": "npm run check && node --test tests/*.test.mjs tests/*.test.ts",
+    "test": "npm run check && node --test tests/*.test.ts",
     "check": "tsc --noEmit && tsc -p tsconfig.node.json && tsc -p tsconfig.tests.json",
     "build": "npm run check && vite build --configLoader native",
     "preview": "vite preview --configLoader native"

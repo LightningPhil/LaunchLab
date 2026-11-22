@@ -10,10 +10,10 @@ import type { CannonSession } from './cannon-model.ts';
 import { rocketExhibitMarkup, mountRocketExhibit } from './rocket-exhibit.ts';
 import type { RocketSession } from './rocket-model.ts';
 import { scienceLabMarkup, mountScienceLab, type ScienceLabSession } from './science-labs.ts';
+import { escapeHtml as escape } from '../dom.ts';
 
 let dialog: HTMLDialogElement | undefined;
 export const isWikiOpen = () => !!dialog?.open;
-const escape = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const symbol = (a: Article) => flightTopicArt(a.id) || (a.id==='escape-velocity'?'↗':a.id==='lagrange-points'?'✣':a.id==='telescopes'?'⌕':a.id === 'asteroid-belt' ? '⠿' : '◎');
 const labTaglines:Record<string,string>={cannons:'Pressure. A push. A boom.',rockets:'Thrust. Flight. Discovery.','escape-velocity':'One push. Will it return?','lagrange-points':'Nudge a probe. Find the balance.',telescopes:'Gather light. Split two stars.'};
 

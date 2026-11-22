@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requiredElement } from '../src/dom.ts';
+import { escapeHtml, requiredElement } from '../src/dom.ts';
 import { RocketPhysics, guidanceMode } from '../src/rocket_physics.ts';
 import { ROCKET_DEFAULTS } from '../src/launch-settings.ts';
+
+test('escapeHtml escapes all five HTML metacharacters without altering plain text', () => {
+  assert.equal(escapeHtml('Plain text · 9.81 m/s²'), 'Plain text · 9.81 m/s²');
+  assert.equal(
+    escapeHtml(`5 < 9 & 9 > 5 "quote" 'apostrophe'`),
+    '5 &lt; 9 &amp; 9 &gt; 5 &quot;quote&quot; &#39;apostrophe&#39;'
+  );
+  assert.equal(escapeHtml(''), '');
+});
 
 test('required controls preserve their identity and fail clearly on missing or mismatched markup', () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');

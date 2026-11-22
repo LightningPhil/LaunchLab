@@ -3,7 +3,7 @@
 Run from the repository root. No Python dependency is needed by the app/tests.
 The frozen binary64 initial states also used by JS separate propagation error
 from small differences in root rounding. Equilibria are checked against JPL in
-science-labs.test.mjs. Derivatives below are independently written.
+science-labs.test.ts. Derivatives below are independently written.
 """
 import argparse
 import json

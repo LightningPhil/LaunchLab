@@ -118,9 +118,9 @@ The repository is <https://github.com/LightningPhil/LaunchLab> and the hosted ap
 - `src/squid.ts`, `src/squid-life.ts`, `src/ice-bear.ts`: Ganymede's ten-limbed squid and its hammer → dive → swim → hammer → emerge cycle, with each abandoned hole freezing closed; Pluto's frosty polar bear and four-legged gait. Their close-ups follow the current action.
 - `src/character-remarks.ts`, `src/remarks/`: the quip pools and shuffled-round selection for every world and flight event.
 - `src/wiki/`: educational content, hash navigation, search, reading levels, moon families, accessible illustrations and the responsive atlas. `docs/wiki/artwork.md` records image-generation prompts and asset locations.
-- `src/ui.ts`, `src/flight-deck.ts`, `src/world-art.ts`, `src/planet-facts.ts`, `src/world-characters.ts`, `src/gravity-scale.ts`, `index.html`, stylesheets: accessible experiment controls, world artwork, fact cards, the world → character mapping, gravity bounds and responsive layout.
+- `src/ui.ts`, `src/flight-deck.ts`, `src/world-art.ts`, `src/planet-facts.ts`, `src/world-characters.ts`, `index.html`, stylesheets: accessible experiment controls, world artwork, fact cards, the world → character mapping and responsive layout.
 
-The gravity/radius/atmosphere presets live once, in `ENVIRONMENTS` (`src/environment.ts`); the renderer palette and the picker read from it, and `tests/worlds.test.mjs` checks that `index.html`, the fact cards and the artwork cover exactly that set. Add a world there first.
+The gravity/radius/atmosphere presets live once, in `ENVIRONMENTS` (`src/environment.ts`); the renderer palette and the picker read from it, and `tests/worlds.test.ts` checks that `index.html`, the fact cards and the artwork cover exactly that set. Add a world there first.
 
 `solar-system-cartoon-assets/` holds the 1254 px PNG masters of the world artwork. Nothing in the build reads them; `src/assets/worlds/{mini,full}/*.webp` are hand-exported derivatives (64 px and 320 px, transparent) that Vite packages with the web build.
 

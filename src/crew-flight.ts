@@ -1,4 +1,5 @@
-import { rocketWatchAim } from './crew-watch.ts';
+import { rocketWatchAim, type WatchAim } from './crew-watch.ts';
+import type { CrewPose } from './crew.ts';
 
 /** Surface walkers retreat for min(5, flight time + 1) seconds, then return. Ice-hole and
  * cloud swimmers retain their own lifecycles. Movement uses presentation time. */
@@ -10,8 +11,24 @@ export interface CrewFlight {
   fleeSeconds:number;pendingLanding?:{target:{x:number;y?:number};mode:'cannon'|'rocket';radius:number};
   stage:'flight'|'approach'|'inspect';target?:{x:number;y:number};stopX?:number;approachSpeed?:number;
 }
-const clearAim=(ch:any)=>{delete ch.watchAim;delete ch.watchTarget;delete ch.inspectTarget;delete ch.gaitSpeed;};
-export function beginCrewFlight(ch:any,launchX:number,mode:'cannon'|'rocket',bounds:{left:number;right:number},alreadyWatching=false,flightSeconds=Infinity) {
+export interface CrewFlightActor {
+  type: string;
+  x: number;
+  speed: number;
+  state: string;
+  stateTimer: number;
+  visible?: boolean;
+  direction: number;
+  reaction?: CrewPose['reaction'] | null;
+  reducedMotion?: boolean;
+  gaitSpeed?: number;
+  watchAim?: WatchAim;
+  watchTarget?: { x: number; y: number };
+  inspectTarget?: { x: number; y: number };
+  flightReaction?: CrewFlight;
+}
+const clearAim=(ch:CrewFlightActor)=>{delete ch.watchAim;delete ch.watchTarget;delete ch.inspectTarget;delete ch.gaitSpeed;};
+export function beginCrewFlight(ch:CrewFlightActor|null|undefined,launchX:number,mode:'cannon'|'rocket',bounds:{left:number;right:number},alreadyWatching=false,flightSeconds=Infinity) {
   if(!ch||!isWalkingGuest(ch.type))return;
   const away=ch.x>=launchX?1:-1,left=Math.min(bounds.left,bounds.right),right=Math.max(bounds.left,bounds.right);
   const fleeSeconds=alreadyWatching?0:Math.min(5,Math.max(0,flightSeconds)+1);
@@ -22,13 +39,13 @@ export function beginCrewFlight(ch:any,launchX:number,mode:'cannon'|'rocket',bou
   clearAim(ch);ch.visible=true;ch.direction=away;ch.reaction=null;
   ch.state=alreadyWatching?'waiting':'running_away';ch.stateTimer=0;
 }
-export function clearCrewFlight(ch:any,restoreHome=false) {
+export function clearCrewFlight(ch:CrewFlightActor|null|undefined,restoreHome=false) {
   if(!ch?.flightReaction)return;
   if(restoreHome)ch.x=ch.flightReaction.homeX;
   delete ch.flightReaction;clearAim(ch);ch.visible=true;
   if(ch.state!=='squashed'){ch.state='idle';ch.stateTimer=0;}
 }
-export function inspectLanding(ch:any,target:{x:number;y?:number},mode:'cannon'|'rocket',radius=0) {
+export function inspectLanding(ch:CrewFlightActor|null|undefined,target:{x:number;y?:number},mode:'cannon'|'rocket',radius=0) {
   if(!ch||!isWalkingGuest(ch.type)||!Number.isFinite(target.x))return;
   const previous:CrewFlight|undefined=ch.flightReaction;
   if(ch.state!=='squashed'&&previous?.stage==='flight'&&previous.elapsed<previous.fleeSeconds){
@@ -39,7 +56,7 @@ export function inspectLanding(ch:any,target:{x:number;y?:number},mode:'cannon'|
   }
   beginApproach(ch,target,mode,radius);
 }
-function beginApproach(ch:any,target:{x:number;y?:number},mode:'cannon'|'rocket',radius:number) {
+function beginApproach(ch:CrewFlightActor,target:{x:number;y?:number},mode:'cannon'|'rocket',radius:number) {
   const previous:CrewFlight|undefined=ch.flightReaction;
   let dx=target.x-ch.x;
   if(radius>0){const circumference=2*Math.PI*radius;dx=((dx+circumference/2)%circumference+circumference)%circumference-circumference/2;}
@@ -53,8 +70,8 @@ function beginApproach(ch:any,target:{x:number;y?:number},mode:'cannon'|'rocket'
   if(ch.state!=='squashed'){ch.state='running_to';ch.stateTimer=0;}
   ch.direction=stopX>=ch.x?1:-1;
 }
-export function updateCrewFlight(ch:any,dt:number,vehicle:{x:number;y:number}|null,radius=0,paused=false,reduced=false) {
-  const f:CrewFlight|undefined=ch?.flightReaction;if(!f)return false;
+export function updateCrewFlight(ch:CrewFlightActor|null|undefined,dt:number,vehicle:{x:number;y:number}|null,radius=0,paused=false,reduced=false) {
+  const f:CrewFlight|undefined=ch?.flightReaction;if(!ch||!f)return false;
   dt=paused?0:Math.max(0,Number.isFinite(dt)?Math.min(dt,.1):0);ch.reducedMotion=reduced;ch.visible=true;
   if(ch.state==='squashed'){
     f.elapsed+=dt;ch.stateTimer=f.elapsed;
@@ -75,7 +92,7 @@ export function updateCrewFlight(ch:any,dt:number,vehicle:{x:number;y:number}|nu
       ch.x=f.retreatX;delete ch.gaitSpeed;
       if(f.pendingLanding){const landing=f.pendingLanding;beginApproach(ch,landing.target,landing.mode,landing.radius);return true;}
       ch.state='watching';
-      ch.watchAim=rocketWatchAim(ch.x,vehicle!,radius);ch.watchTarget={...vehicle};
+      ch.watchAim=rocketWatchAim(ch.x,vehicle!,radius);ch.watchTarget={...vehicle!};
     }
     ch.stateTimer=ch.state==='watching'?f.elapsed-f.fleeSeconds:f.elapsed;
   }else if(f.stage==='approach'){
@@ -85,7 +102,7 @@ export function updateCrewFlight(ch:any,dt:number,vehicle:{x:number;y:number}|nu
   }
   if(f.stage==='inspect'){
     ch.state='inspecting';ch.stateTimer=f.elapsed;ch.direction=f.target!.x>=ch.x?1:-1;
-    ch.reaction=null;ch.inspectTarget={...f.target};
+    ch.reaction=null;ch.inspectTarget={...f.target!};
   }
   return true;
 }

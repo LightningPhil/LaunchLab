@@ -2,11 +2,10 @@ import type { RocketDisplay } from './rocket-presentation.ts';
 import { Physics } from './physics.ts';
 import { RocketPropellants } from './rocket_propellants.ts';
 import { RocketPhysics } from './rocket_physics.ts';
-import { ENVIRONMENTS, resolveEnvironment } from './environment.ts';
+import { ENVIRONMENTS, clampGravity, environmentByName, resolveEnvironment } from './environment.ts';
 import { orbitPathFeedback } from './orbit-feedback.ts';
 import { getPlanetFact } from './planet-facts.ts';
 import { installFactExplanations, updateFactLabels } from './fact-dialog.ts';
-import { clampGravity } from './gravity-scale.ts';
 import { getWorldArt } from './world-art.ts';
 import { applyLaunchSettings, CANNON_DEFAULTS, ROCKET_DEFAULTS, EARTH_ORBIT_EXAMPLE, EARTH_STEERING_PRACTICE, setMixtureBounds } from './launch-settings.ts';
 import { protectTouchRange } from './touch-range.ts';
@@ -191,10 +190,11 @@ function init(callbacks: UICallbacks) {
     (function (btn) {
       btn.addEventListener('click', function () {
         if (isFlightActive) return;
-        var g = parseFloat(btn.dataset.gravity ?? '');
-        setGravity(g);
-        highlightPlanet(btn.getAttribute('data-planet'));
-        if (onGravityChange) onGravityChange(g);
+        const preset = environmentByName(btn.dataset.planet);
+        if (!preset) return;
+        setGravity(preset.gravity);
+        highlightPlanet(preset.name);
+        if (onGravityChange) onGravityChange(preset.gravity);
         refreshPreLaunch();
       });
     })(planetButtons[i]);
@@ -236,13 +236,10 @@ function wireModeToggle() {
   }
 }
 
-function setMode(newMode: string | null) {
+function setMode(newMode: string | null, notify = true) {
   if (isFlightActive || (newMode !== 'cannon' && newMode !== 'rocket')) return;
-  // Restoring a recorded flight in the current
-  // mode must not re-run the mode-switch side effects (range clear, camera).
   if (newMode === currentMode) return;
   currentMode = newMode;
-  // Update toggle button highlights
   for (var i = 0; i < modeButtons.length; i++) {
     var btn = modeButtons[i];
     btn.setAttribute('aria-pressed', String(btn.getAttribute('data-mode') === currentMode));
@@ -254,13 +251,10 @@ function setMode(newMode: string | null) {
   }
   requiredElement('cannon-actions', 'div').hidden = currentMode !== 'cannon';
   requiredElement('rocket-actions', 'div').hidden = currentMode !== 'rocket';
-  // Show/hide panels (the [hidden] rule in style.css does the display work)
   cannonPanel.hidden = currentMode !== 'cannon';
   rocketPanel.hidden = currentMode !== 'rocket';
-  // A deep workshop scroll from one launcher must not hide the other's setup.
   document.querySelector<HTMLElement>('.controls-scroll')!.scrollTop = 0;
-  // Notify main.ts
-  if (onModeChange) onModeChange(currentMode);
+  if (notify && onModeChange) onModeChange(currentMode);
 }
 
 // ── Slider helpers ─────────────────────────────────────────────────────────
@@ -298,8 +292,7 @@ function updateSliderDisplay(slider: HTMLInputElement, display: HTMLElement, uni
 }
 
 // Preset gravities come from the shared ENVIRONMENTS table (single source of
-// truth with the solver and renderer); index.html's data-gravity attributes are
-// checked against it in tests/worlds.test.mjs.
+// truth with the solver and renderer).
 var PLANET_GRAVITY_MAP = ENVIRONMENTS.map(function (environment) {
   return { name: environment.name, g: environment.gravity };
 });
@@ -329,12 +322,10 @@ function highlightPlanet(name: string | null) {
       btn.classList.remove('active');
     }
   }
-  var env = resolveEnvironment(currentGravity());
+  var env = environmentByName(name) ?? resolveEnvironment(currentGravity());
   var label = requiredElement('environment-label', 'span');
-  if (label) label.textContent = (env.interpolated ? 'Custom world' : env.name[0].toUpperCase() + env.name.slice(1)) + ' · ' + formatNumber(env.gravity, 2) + ' m/s²';
-  // A custom (interpolated) world has no fact card; the nearest preset stays
-  // highlighted in the grid, but its facts would be misleading here.
-  updatePlanetFactButton(env.interpolated ? null : env.name);
+  if (label) label.textContent = env.name[0].toUpperCase() + env.name.slice(1) + ' · ' + formatNumber(env.gravity, 2) + ' m/s²';
+  updatePlanetFactButton(env.name);
 }
 
 function initPlanetFacts() {
@@ -872,7 +863,7 @@ function refreshPreLaunch() {
   note.hidden = !assisted;
   const environment = resolveEnvironment(gravity);
   const speed = Math.sqrt(gravity * environment.radius ** 2 / (environment.radius + vals.orbitAltitudeKm * 1000));
-  const world = environment.interpolated ? 'this world' : environment.name[0].toUpperCase() + environment.name.slice(1);
+  const world = environment.name[0].toUpperCase() + environment.name.slice(1);
   note.textContent = `${formatNumber(vals.orbitAltitudeKm)} km above ${world} needs about ${formatNumber(speed)} m/s sideways. Your engine and fuel still do the work. Air drag is not modelled.`;
   requiredElement('orbit-example-note', 'p').textContent = '1. Load this example. 2. Press Lift off. It selects Earth and a rocket ready for a 200 km orbit.';
   requiredElement('steering-practice-note', 'p').textContent = 'Load a capable rocket and an editable turn-and-cutoff plan. Fly it, then change one setting and compare.';
@@ -1168,11 +1159,16 @@ function setFlightActive(active: boolean) {
 }
 
 // Restore labels as well as values when replaying a saved configuration.
-// These setters notify the same environment/barrel/mode listeners as editing
-// the controls. The main loop can suppress scene transitions during restore.
-function restoreFlightConfig(mode: 'cannon' | 'rocket', config: LaunchSettings) {
+// Passing `{ silent: true }` updates controls and readouts without firing
+// user-gesture callbacks (`onModeChange`, `onGravityChange`, `onBarrelChange`).
+function restoreFlightConfig(
+  mode: 'cannon' | 'rocket',
+  config: LaunchSettings,
+  options: { silent?: boolean } = {}
+) {
   if (isFlightActive) return;
-  setMode(mode);
+  const notify = !options.silent;
+  setMode(mode, notify);
   applyLaunchSettings(document, mode, mode === 'rocket' ? { cutoffTime: 0, ...config } : config);
   if (config.gravity !== undefined && Number.isFinite(config.gravity)) setGravity(config.gravity);
   if (mode === 'rocket') onPropellantChange();
@@ -1180,8 +1176,8 @@ function restoreFlightConfig(mode: 'cannon' | 'rocket', config: LaunchSettings) 
   updateGuidanceSubPanels();
   var gravity = currentGravity();
   highlightNearestPlanet(gravity);
-  if (onGravityChange) onGravityChange(gravity);
-  if (mode === 'cannon' && onBarrelChange) onBarrelChange(parseFloat(sliderBarrel.value));
+  if (notify && onGravityChange) onGravityChange(gravity);
+  if (notify && mode === 'cannon' && onBarrelChange) onBarrelChange(parseFloat(sliderBarrel.value));
   refreshPreLaunch();
 }
 
@@ -1213,6 +1209,14 @@ function updateAllDisplays() {
 }
 
 
+function setSteeringDebrief(advice: string | null) {
+  const debrief = document.getElementById('steering-debrief');
+  if (!debrief) return;
+  debrief.hidden = !advice;
+  const paragraph = debrief.querySelector('p');
+  if (paragraph) paragraph.textContent = advice ?? '';
+}
+
 // ── Expose namespace ──────────────────────────────────────────────────────
 export const UI = {
   init: init,
@@ -1231,5 +1235,6 @@ export const UI = {
   refreshPreLaunch: refreshPreLaunch,
   resetReadouts: resetReadouts,
   setFlightActive: setFlightActive,
+  setSteeringDebrief: setSteeringDebrief,
   highlightNearestPlanet: highlightNearestPlanet
 };

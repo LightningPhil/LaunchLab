@@ -1,3 +1,5 @@
+import type { CrewPose } from './crew.ts';
+
 /** One presentation-time schedule, shared by all worlds. No missed action queues. */
 export const SILLY_ACTIONS = {
   golfer:'umbrella', spaceman:'paper-plane', robot:'book', icerobot:'tablet',
@@ -5,9 +7,19 @@ export const SILLY_ACTIONS = {
 } as const;
 export type SillyKind = typeof SILLY_ACTIONS[keyof typeof SILLY_ACTIONS];
 export interface SillyAction { kind:SillyKind; elapsed:number; duration:number }
+export interface BusinessActor {
+  type: string;
+  state: string;
+  stateTimer: number;
+  direction: number;
+  business?: SillyAction;
+  bubbleText?: string | null;
+  bubbleTimer?: number;
+  reaction?: CrewPose['reaction'] | null;
+}
 export interface BusinessClock {
   remaining:number;
-  active?:{character:any;state:string;stateTimer:number;direction:number};
+  active?:{character:BusinessActor;state:string;stateTimer:number;direction:number};
 }
 const choice=(random:()=>number)=>Math.max(0,Math.min(1,random()));
 export function createBusinessClock(random=Math.random):BusinessClock { return {remaining:12+16*choice(random)}; }
@@ -18,18 +30,18 @@ export function cancelBusiness(clock:BusinessClock) {
   if(ch.state==='business'){ch.state=active.state;ch.stateTimer=active.stateTimer;ch.direction=active.direction;}
   delete clock.active;
 }
-export function updateBusiness(clock:BusinessClock,ch:any,dt:number,busy:boolean,random=Math.random) {
+export function updateBusiness(clock:BusinessClock,ch:BusinessActor|null|undefined,dt:number,busy:boolean,random=Math.random) {
   dt=Number.isFinite(dt)?Math.max(0,dt):0;
   clock.remaining-=dt;
-  if(clock.active&&(clock.active.character!==ch||busy||ch.state==='squashed'))cancelBusiness(clock);
-  if(clock.active){
+  if(clock.active&&(clock.active.character!==ch||busy||ch?.state==='squashed'))cancelBusiness(clock);
+  if(clock.active&&ch?.business){
     ch.business.elapsed+=dt;ch.stateTimer=ch.business.elapsed;
     if(ch.business.elapsed>=ch.business.duration)cancelBusiness(clock);
   }
   if(clock.remaining>0)return;
   clock.remaining=45+45*choice(random);
   const kind=SILLY_ACTIONS[ch?.type as keyof typeof SILLY_ACTIONS];
-  if(busy||clock.active||!kind||ch.state==='squashed')return;
+  if(!ch||busy||clock.active||!kind||ch.state==='squashed')return;
   clock.active={character:ch,state:ch.state,stateTimer:ch.stateTimer,direction:ch.direction};
   ch.business={kind,elapsed:0,duration:kind==='blueprint'?11:9} satisfies SillyAction;
   ch.state='business';ch.stateTimer=0;ch.direction=1;

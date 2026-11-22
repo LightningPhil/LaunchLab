@@ -1,10 +1,15 @@
-import { classifyTrajectory } from './environment.ts';
+import { classifyTrajectory, type TrajectoryState } from './environment.ts';
 import { formatNumber } from './number-format.ts';
 import type { FlightRecord } from './flight.ts';
 
+export interface OrbitFeedbackState extends TrajectoryState {
+  launched?: boolean;
+  outcome: string;
+}
+
 /** Describe the path a rocket would follow with its engine off. A trajectory
  * through the planet is a landing, not a reachable underground low point. */
-export function orbitPathFeedback(state: any, gravity: number) {
+export function orbitPathFeedback(state: OrbitFeedbackState, gravity: number) {
   const path = classifyTrajectory({ ...state, engineOn: false }, gravity);
   const meetsSurface = path.periapsisAltitude !== null && path.periapsisAltitude <= 1;
   return {

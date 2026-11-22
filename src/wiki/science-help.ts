@@ -1,4 +1,4 @@
-const attr=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+import { escapeHtml as attr } from '../dom.ts';
 export const helpAttrs=(title:string,text:string)=>text?`data-help-title="${attr(title)}" data-help="${attr(text)}"`:'';
 export const helpButton=(title:string,text:string)=>text?`<button type="button" class="science-help-button" aria-label="About ${attr(title)}" ${helpAttrs(title,text)}>?</button>`:'';
 export const FIELD_HELP:Record<string,string>={

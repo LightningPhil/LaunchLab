@@ -1,9 +1,9 @@
 import './fact-dialog.css';
+import { escapeHtml as escape } from './dom.ts';
 import { explainFact, factLabel, FACT_TOPICS, type FactKey } from './fact-explanations.ts';
 import { getPlanetFact, type PlanetFact } from './planet-facts.ts';
 import { getWorldArt } from './world-art.ts';
 
-const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const elephant = `<svg viewBox="0 0 100 72" aria-hidden="true"><path d="M17 42C6 37 6 23 14 22M19 42V62H31V48H51V62H63V42C73 45 77 38 80 32L81 53C82 65 97 65 97 51L91 49C91 55 88 56 88 51L87 28C86 11 72 8 62 17C51 9 25 10 19 24Z" fill="#718e85" stroke="#3e665d" stroke-width="2" stroke-linejoin="round"/><path d="M63 21C43 11 46 43 61 41C68 36 70 27 63 21" fill="#a2b7a7" stroke="#3e665d" stroke-width="2"/><circle cx="78" cy="25" r="2" fill="#263e39"/><path d="M80 36Q74 45 70 38" fill="#fff8e4"/></svg>`;
 const numberMarkup = (value: string) => escape(value).replace(/,/g, ',<wbr>');
 

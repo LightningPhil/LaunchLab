@@ -1,11 +1,13 @@
+import type { CoastBody } from './environment.ts';
+
 /** Unpowered two-body motion, parameterised from periapsis. This avoids stepping
  * through millions of seconds on a nearly escaping ellipse. The universal
  * anomaly also handles hyperbolic and exactly parabolic departures.
  * Kepler equations: https://docs.poliastro.space/en/stable/autoapi/poliastro/core/angles/index.html
  */
 export const ESCAPE_CENTRE_RADII = 10;
-export type BallisticCoast = {
-  initial: any; mu: number; alpha: number; q: number; eccentricity: number;
+export type BallisticCoast<S extends CoastBody = CoastBody> = {
+  initial: S; mu: number; alpha: number; q: number; eccentricity: number;
   angularMomentum: number; ux: number; uy: number; direction: number;
   initialAnomaly: number; initialPeriTime: number; endAnomaly: number; endPeriTime: number;
   endTime: number; apexTime: number | null; apexHeight: number | null;
@@ -42,7 +44,7 @@ function periTime(plan: Pick<BallisticCoast, 'q' | 'eccentricity' | 'alpha' | 'm
 /** Safe orbits are handled separately by the rocket orbital coast solver.
  * Returning conics must actually intersect the surface; speed alone is not
  * sufficient to infer a landing from an arbitrary airborne rocket state. */
-export function planBallisticCoast(initial: any, gravity: number): BallisticCoast | null {
+export function planBallisticCoast<S extends CoastBody>(initial: S, gravity: number): BallisticCoast<S> | null {
   const R = initial.planetRadius;
   if (!(R > 0) || !(gravity > 0) || initial.engineOn || initial.outcome !== 'flight') return null;
   const { wx: x, wy: y, wvx: vx, wvy: vy } = initial;
@@ -57,7 +59,7 @@ export function planBallisticCoast(initial: any, gravity: number): BallisticCoas
   const ex = (v2 - mu / r) * x - dot * vx, ey = (v2 - mu / r) * y - dot * vy;
   const eLength = Math.hypot(ex, ey);
   if (!(eLength > 0) || !(eccentricity > 0)) return null;
-  const plan: BallisticCoast = { initial: { ...initial }, mu, alpha, q, eccentricity,
+  const plan: BallisticCoast<S> = { initial: { ...initial }, mu, alpha, q, eccentricity,
     angularMomentum: h, ux: ex / eLength, uy: ey / eLength, direction: h < 0 ? -1 : 1,
     initialAnomaly: anomalyAtRadius(r, q, eccentricity, alpha) * (dot < 0 ? -1 : 1),
     initialPeriTime: 0, endAnomaly: 0, endPeriTime: 0, endTime: 0,
@@ -81,7 +83,7 @@ export function planBallisticCoast(initial: any, gravity: number): BallisticCoas
   return Number.isFinite(plan.endTime) && plan.endTime > initial.time ? plan : null;
 }
 
-function geometry(plan: BallisticCoast, u: number) {
+function geometry<S extends CoastBody>(plan: BallisticCoast<S>, u: number) {
   const z = plan.alpha * u * u, { c, s } = stumpff(z);
   const sinTerm = u * (1 - z * s), px = plan.q - u * u * c;
   const py = Math.abs(plan.angularMomentum) / Math.sqrt(plan.mu) * sinTerm;
@@ -90,7 +92,7 @@ function geometry(plan: BallisticCoast, u: number) {
     vy: Math.abs(plan.angularMomentum) * (1 - z * c) / radius };
 }
 
-export function sampleBallisticCoast(plan: BallisticCoast, time: number): any {
+export function sampleBallisticCoast<S extends CoastBody>(plan: BallisticCoast<S>, time: number): S {
   const initial = plan.initial;
   if (time <= initial.time) return { ...initial };
   time = Math.min(time, plan.endTime);

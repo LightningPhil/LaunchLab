@@ -1,7 +1,6 @@
 import { renderToString } from 'katex';
+import { escapeHtml as escape } from '../dom.ts';
 import type { EquationBlock, EquationStep, Reading } from './content.ts';
-
-const escape = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
 /** Bundled fonts/CSS are imported by wiki.ts, so this renderer also runs in tests.
  * MathML is kept alongside the visual layout for assistive technology. */

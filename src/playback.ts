@@ -1,13 +1,17 @@
-import type { FlightRecord } from './flight.ts';
+export type PlaybackRun = {
+  duration: number;
+  events: { time: number; kind: string; label?: string }[];
+  orbit?: { initial: { time: number }; period: number };
+};
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const smootherstep = (x: number) => { x = clamp(x, 0, 1); return clamp(x * x * x * (x * (x * 6 - 15) + 10), 0, 1); };
 export const MAX_AUTO_VIEW_SECONDS = 20;
 
 type AutoProfile = { floor: number; variation: number; apex: number; halfWidth: number };
-const profiles = new WeakMap<FlightRecord, AutoProfile>();
+const profiles = new WeakMap<PlaybackRun, AutoProfile>();
 
-function autoProfile(run: FlightRecord): AutoProfile {
+function autoProfile(run: PlaybackRun): AutoProfile {
   let profile = profiles.get(run);
   if (!profile) {
     // The completed recording tells us the duration before the first frame.
@@ -31,7 +35,7 @@ function autoProfile(run: FlightRecord): AutoProfile {
 /** A modest change of pace across the whole flight, never a wait at an event.
  * Short flights stay in real time; long flights start at their required speed.
  * Ignition, burnout, guidance changes and impact do not reset that speed. */
-export function automaticRate(run: FlightRecord, time: number): number {
+export function automaticRate(run: PlaybackRun, time: number): number {
   if (run.orbit) {
     // Give the ascent eight viewing seconds and a complete circuit twelve.
     // Continuing another lap keeps its pace; extending the observation must
@@ -51,14 +55,14 @@ export class PlaybackClock {
   time = 0;
   paused = true;
   mode: 'auto' | number = 'auto';
-  private run: FlightRecord | null = null;
+  private run: PlaybackRun | null = null;
   get rate() { return this.mode === 'auto' ? (this.run ? automaticRate(this.run, this.time) : 1) : this.mode; }
-  load(run: FlightRecord) { this.run = run; this.time = 0; this.paused = false; }
+  load(run: PlaybackRun) { this.run = run; this.time = 0; this.paused = false; }
   select(mode: 'auto' | number) { this.mode = mode === 'auto' ? 'auto' : clamp(Number.isFinite(mode) ? mode : 1, 1, 64); }
   seek(time: number, duration: number) {
     this.time = clamp(time, 0, duration); this.paused = true;
   }
-  advance(wallSeconds: number, run: FlightRecord) {
+  advance(wallSeconds: number, run: PlaybackRun) {
     this.run = run;
     if (this.paused) return;
     let remaining = Number.isFinite(wallSeconds) ? Math.max(0, wallSeconds) : 0;

@@ -27,9 +27,6 @@ export interface RocketConfig {
   gravity?: number; planetRadius?: number; environment?: Environment | null; Pa_Pa?: number;
   propMassMultiplier?: number;
 }
-export interface RocketPredictionOptions {
-  dt?: number; maxTime?: number; startX?: number; startY?: number; planetRadius?: number; guidance?: Guidance;
-}
 
 function computeMassFlow(Pc_Pa: number, At: number, cStarEff: number) {
   if (!(cStarEff > 0) || !(Pc_Pa > 0) || !(At > 0)) return 0;
@@ -52,9 +49,6 @@ function computeThrustToWeight(F: number, m0: number, g: number) {
   return g === 0 ? (F > 0 ? Infinity : 0) : F / (m0 * g);
 }
 function computeBurnTime(mProp: number, mdot: number) { return mdot > 0 ? Math.max(0, mProp) / mdot : Infinity; }
-function solveThroatForThrust(Ftarget: number, CfEff: number, Pc_Pa: number) {
-  return CfEff > 0 && Pc_Pa > 0 ? Math.max(0, Ftarget) / (CfEff * Pc_Pa) : 0;
-}
 function throatAreaFromDiameter(d_mm: number) {
   return Number.isFinite(d_mm) && d_mm > 0 ? Math.PI * (d_mm / 2000) ** 2 : 0;
 }
@@ -63,8 +57,8 @@ export interface Guidance {
   mode: string;
   getAngle(state: RocketState): number;
   boundaries?: number[];
-  getThrottle?: (state: any) => number;
-  shouldCutoff?: (state: any) => boolean;
+  getThrottle?: (state: RocketState) => number;
+  shouldCutoff?: (state: RocketState) => boolean;
   cutoffReason?: 'orbit' | 'planned';
 }
 
@@ -409,48 +403,10 @@ function computePreLaunch(config: RocketConfig, gravity: number) {
     flowRegime: engine.flowRegime, effectiveEpsilon: engine.effectiveEpsilon };
 }
 
-function predictTrajectory(config: RocketConfig, gravity: number, options: RocketPredictionOptions = {}) {
-  const dt = typeof options.dt === 'number' && Number.isFinite(options.dt) && options.dt > 0 ? options.dt : 1 / 120;
-  const maxTime = typeof options.maxTime === 'number' && Number.isFinite(options.maxTime) && options.maxTime > 0 ? Math.min(86400, options.maxTime) : 3600;
-  const launchX = options.startX ?? 0, launchY = options.startY ?? 0;
-  const environment = environmentForConfig(config, gravity);
-  const planetRadius = options.planetRadius ?? config.planetRadius ?? environment?.radius ?? 0;
-  const guidance = options.guidance ?? buildGuidance(config);
-  let state = createRocketState({ ...config, environment, planetRadius });
-  state.x = launchX; state.y = launchY;
-  if (planetRadius > 0) {
-    state.wx = (planetRadius + launchY) * Math.sin(launchX / planetRadius);
-    state.wy = (planetRadius + launchY) * Math.cos(launchX / planetRadius);
-  }
-  let minX = launchX, maxX = launchX, maxHeight = Math.max(0, launchY);
-  let status = 'limit', complete = false;
-  const maxSteps = Math.min(500000, Math.ceil(maxTime / dt));
-  for (let i = 0; i < maxSteps && state.time < maxTime; i++) {
-    state = stepRocket(state, Math.min(dt, maxTime - state.time), gravity, guidance);
-    if (![state.x, state.y, state.vx, state.vy].every(Number.isFinite)) { status = 'invalid'; break; }
-    minX = Math.min(minX, state.x); maxX = Math.max(maxX, state.x);
-    maxHeight = Math.max(maxHeight, state.y, state.apexHeight ?? 0);
-    if (state.outcome !== 'flight') { status = state.outcome; complete = true; break; }
-    const classification = classifyTrajectory(state, gravity);
-    if (classification.kind === 'orbit' || classification.kind === 'escape') {
-      status = classification.kind; complete = true; break;
-    }
-  }
-  return { fizzled: state.fizzled, complete, status, time: state.time,
-    burnTime: state.burnoutTime, burnoutSpeed: state.burnoutSpeed,
-    apexTime: state.apexTime, apexHeight: state.apexHeight,
-    impactTime: state.impactTime, impactSpeed: state.impactSpeed,
-    launchX, launchY, minX, maxX, maxHeight,
-    downrange: state.x - launchX, flightTime: state.time,
-    landingX: state.outcome === 'impact' ? state.x : null,
-    landingY: state.outcome === 'impact' ? 0 : null,
-    finalState: state, classification: classifyTrajectory(state, gravity) };
-}
-
 export const RocketPhysics = {
   G0, computeMassFlow, computeThrust, computeIsp, computeExhaustVelocity,
   createRocketState, stepRocket, guidanceFixed, guidancePitchProgram,
   guidanceProgradeLock, buildGuidance, computeDeltaV, computeThrustToWeight,
-  computeBurnTime, solveThroatForThrust, throatAreaFromDiameter,
-  computePreLaunch, predictTrajectory, classifyTrajectory,
+  computeBurnTime, throatAreaFromDiameter,
+  computePreLaunch, classifyTrajectory,
 };

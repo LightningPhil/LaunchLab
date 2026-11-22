@@ -6,39 +6,53 @@
  * https://nssdc.gsfc.nasa.gov/planetary/factsheet/ (accessed September 2026).
  * The radius/gravity pairs retain the app's existing spherical planet model.
  */
+export type WorldId =
+  | 'pluto' | 'ganymede' | 'moon' | 'mercury' | 'mars' | 'venus'
+  | 'uranus' | 'earth' | 'saturn' | 'neptune' | 'jupiter' | 'sun';
+
+export const GRAVITY_MIN = 0.5;
+export const GRAVITY_MAX = 300;
+
+export function clampGravity(gravity: number): number {
+  return Math.min(GRAVITY_MAX, Math.max(GRAVITY_MIN, gravity));
+}
+
 export interface Environment {
-  name: string;
+  name: WorldId;
   gravity: number;
   radius: number;
   surfacePressure: number;
   scaleHeight: number;
   isGas: boolean;
-  interpolated: boolean;
 }
 
-export const ENVIRONMENTS: readonly Environment[] = Object.freeze([
-  { name: 'pluto', gravity: 0.62, radius: 1188300, surfacePressure: 1, scaleHeight: 50000, isGas: false, interpolated: false },
-  { name: 'ganymede', gravity: 1.428, radius: 2634100, surfacePressure: 0, scaleHeight: 1, isGas: false, interpolated: false },
-  { name: 'moon', gravity: 1.62, radius: 1737400, surfacePressure: 0, scaleHeight: 1, isGas: false, interpolated: false },
-  { name: 'mercury', gravity: 3.7, radius: 2439700, surfacePressure: 0, scaleHeight: 1, isGas: false, interpolated: false },
-  { name: 'mars', gravity: 3.72, radius: 3389500, surfacePressure: 636, scaleHeight: 11000, isGas: false, interpolated: false },
-  { name: 'venus', gravity: 8.87, radius: 6051800, surfacePressure: 9200000, scaleHeight: 15900, isGas: false, interpolated: false },
-  { name: 'uranus', gravity: 9.01, radius: 25362000, surfacePressure: 100000, scaleHeight: 27700, isGas: true, interpolated: false },
-  { name: 'earth', gravity: 9.81, radius: 6371000, surfacePressure: 101325, scaleHeight: 8500, isGas: false, interpolated: false },
-  { name: 'saturn', gravity: 11.19, radius: 58232000, surfacePressure: 100000, scaleHeight: 59500, isGas: true, interpolated: false },
-  { name: 'neptune', gravity: 11.27, radius: 24622000, surfacePressure: 100000, scaleHeight: 19700, isGas: true, interpolated: false },
-  { name: 'jupiter', gravity: 25.92, radius: 69911000, surfacePressure: 100000, scaleHeight: 27000, isGas: true, interpolated: false },
-  { name: 'sun', gravity: 274, radius: 695700000, surfacePressure: 12500, scaleHeight: 150000, isGas: true, interpolated: false },
-].map(environment => Object.freeze(environment)));
+export const ENVIRONMENTS: readonly Environment[] = Object.freeze(([
+  { name: 'pluto', gravity: 0.62, radius: 1188300, surfacePressure: 1, scaleHeight: 50000, isGas: false },
+  { name: 'ganymede', gravity: 1.428, radius: 2634100, surfacePressure: 0, scaleHeight: 1, isGas: false },
+  { name: 'moon', gravity: 1.62, radius: 1737400, surfacePressure: 0, scaleHeight: 1, isGas: false },
+  { name: 'mercury', gravity: 3.7, radius: 2439700, surfacePressure: 0, scaleHeight: 1, isGas: false },
+  { name: 'mars', gravity: 3.72, radius: 3389500, surfacePressure: 636, scaleHeight: 11000, isGas: false },
+  { name: 'venus', gravity: 8.87, radius: 6051800, surfacePressure: 9200000, scaleHeight: 15900, isGas: false },
+  { name: 'uranus', gravity: 9.01, radius: 25362000, surfacePressure: 100000, scaleHeight: 27700, isGas: true },
+  { name: 'earth', gravity: 9.81, radius: 6371000, surfacePressure: 101325, scaleHeight: 8500, isGas: false },
+  { name: 'saturn', gravity: 11.19, radius: 58232000, surfacePressure: 100000, scaleHeight: 59500, isGas: true },
+  { name: 'neptune', gravity: 11.27, radius: 24622000, surfacePressure: 100000, scaleHeight: 19700, isGas: true },
+  { name: 'jupiter', gravity: 25.92, radius: 69911000, surfacePressure: 100000, scaleHeight: 27000, isGas: true },
+  { name: 'sun', gravity: 274, radius: 695700000, surfacePressure: 12500, scaleHeight: 150000, isGas: true },
+] satisfies Environment[]).map(environment => Object.freeze(environment)));
 
-/** Radius interpolation exactly matches the historical renderer. Intermediate
- * gravity values are explicitly imaginary worlds, including their atmosphere.
+export function environmentByName(name: string | null | undefined): Environment | undefined {
+  return name ? ENVIRONMENTS.find(environment => environment.name === name) : undefined;
+}
+
+/** Smoothly interpolates radius and atmosphere between bracket presets when
+ * the renderer crossfades between worlds; exact presets return a copy of that world.
  */
 export function resolveEnvironment(gravity: number): Environment {
   const g = Number.isFinite(gravity) ? Math.max(0, gravity) : 9.81;
   const last = ENVIRONMENTS[ENVIRONMENTS.length - 1];
-  if (g <= ENVIRONMENTS[0].gravity) return { ...ENVIRONMENTS[0], gravity: g, interpolated: g !== ENVIRONMENTS[0].gravity };
-  if (g >= last.gravity) return { ...last, gravity: g, interpolated: g !== last.gravity };
+  if (g <= ENVIRONMENTS[0].gravity) return { ...ENVIRONMENTS[0], gravity: g };
+  if (g >= last.gravity) return { ...last, gravity: g };
   for (let i = 0; i < ENVIRONMENTS.length - 1; i++) {
     const lo = ENVIRONMENTS[i], hi = ENVIRONMENTS[i + 1];
     if (g < lo.gravity || g > hi.gravity) continue;
@@ -46,7 +60,7 @@ export function resolveEnvironment(gravity: number): Environment {
     if (g === hi.gravity) return { ...hi };
     const t = (g - lo.gravity) / (hi.gravity - lo.gravity);
     const nearest = t <= 0.5 ? lo : hi;
-    return { ...nearest, gravity: g, interpolated: true,
+    return { ...nearest, gravity: g,
       radius: lo.radius + (hi.radius - lo.radius) * t,
       surfacePressure: lo.surfacePressure + (hi.surfacePressure - lo.surfacePressure) * t,
       scaleHeight: lo.scaleHeight + (hi.scaleHeight - lo.scaleHeight) * t };
@@ -68,11 +82,35 @@ export interface OrbitClassification {
   period: number | null;
 }
 
+export interface TrajectoryState {
+  wx: number;
+  wy: number;
+  wvx: number;
+  wvy: number;
+  planetRadius: number;
+  engineOn?: boolean;
+}
+
+export interface CoastBody extends TrajectoryState {
+  time: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  outcome: string;
+  apexTime: number | null;
+  apexHeight: number | null;
+  impactTime: number | null;
+  impactSpeed: number | null;
+  impactVx: number | null;
+  impactVy: number | null;
+}
+
 /** Osculating two-body outcome, meaningful only after thrust has ended.
  * A negative-energy ellipse that intersects the ground is a returning flight,
  * not an orbit. An incoming hyperbola is not declared escaped before periapsis.
  */
-export function classifyTrajectory(state: any, gravity: number): OrbitClassification {
+export function classifyTrajectory(state: TrajectoryState, gravity: number): OrbitClassification {
   const empty: OrbitClassification = { kind: state.engineOn ? 'powered' : 'unpowered', specificEnergy: null, periapsisAltitude: null, apoapsisAltitude: null, period: null };
   const R = state.planetRadius;
   if (state.engineOn || !(R > 0) || !(gravity > 0)) return empty;

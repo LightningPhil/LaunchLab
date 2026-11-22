@@ -8,6 +8,11 @@ import { orbitAttemptFeedback, steeringAttemptFeedback } from './orbit-feedback.
 const reducedMotionQuery = typeof matchMedia === 'function'
   ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
+export interface FlightDeckOptions {
+  errorContainer?: ParentNode | null;
+  onSteeringDebrief?: (advice: string | null) => void;
+}
+
 export class FlightDeck {
   clock = new PlaybackClock();
   run: FlightRecord | null = null;
@@ -30,7 +35,9 @@ export class FlightDeck {
   onSound: () => void = () => {};
   onReplay: () => void = () => {};
   onInspect: () => void = () => {};
-  constructor(parent: HTMLElement) {
+  onSteeringDebrief: (advice: string | null) => void = () => {};
+  constructor(parent: HTMLElement, options: FlightDeckOptions = {}) {
+    if (options.onSteeringDebrief) this.onSteeringDebrief = options.onSteeringDebrief;
     const el = document.createElement('section');
     el.className = 'flight-deck'; el.setAttribute('aria-label', 'Flight controls and exploration');
     el.innerHTML = `<div class="flight-topline"><div class="flight-clock"><div class="chronograph" aria-hidden="true"><svg viewBox="0 0 100 100">
@@ -72,7 +79,7 @@ export class FlightDeck {
     // a caption beneath the timeline. Failures stay visible beside Launch/Reset.
     this.error = document.createElement('p');
     this.error.className = 'flight-error'; this.error.setAttribute('role', 'alert'); this.error.hidden = true;
-    document.querySelector('.launch-actions')!.append(this.error);
+    (options.errorContainer ?? el).append(this.error);
     this.escapeResult = document.createElement('section');
     this.escapeResult.className = 'escape-result'; this.escapeResult.hidden = true;
     this.escapeResult.setAttribute('aria-labelledby', 'escape-result-title');
@@ -175,31 +182,33 @@ export class FlightDeck {
   showResult() {
     if (!this.run) return;
     const run = this.run, end = run.samples[run.samples.length - 1];
-    const debrief = document.querySelector<HTMLElement>('#steering-debrief');
-    if (run.mode === 'rocket' && debrief) {
-      const advice = steeringAttemptFeedback(run);
-      debrief.hidden = !advice;
-      debrief.querySelector('p')!.textContent = advice ?? '';
+    if (run.mode === 'rocket') {
+      this.onSteeringDebrief(steeringAttemptFeedback(run) ?? null);
     }
     const details = this.escapeResult.querySelector<HTMLDetailsElement>('.orbit-details')!;
     details.hidden = true; details.open = false;
     this.escapeResult.querySelector<HTMLButtonElement>('.result-inspect')!.hidden = true;
     this.escapeResult.querySelector<HTMLButtonElement>('.orbit-continue')!.hidden = true;
-    if (run.outcome === 'no-liftoff') { this.message(end.outcomeReason || 'No lift-off: outward thrust must exceed weight. Try less mass, a steeper angle or more thrust.'); return; }
+    if (run.outcome === 'no-liftoff') {
+      const reason = 'outcomeReason' in end ? end.outcomeReason : '';
+      this.message(reason || 'No lift-off: outward thrust must exceed weight. Try less mass, a steeper angle or more thrust.');
+      return;
+    }
     if (run.outcome === 'escape') {
       this.escapeResult.querySelector('.escape-eyebrow')!.textContent = 'ONE-WAY TICKET TO SPACE';
       this.escapeResult.querySelector('h2')!.textContent = 'Escape velocity reached!';
       this.escapeResult.querySelector('button')!.setAttribute('aria-label', 'Dismiss escape message');
       this.escapeResult.querySelector<HTMLButtonElement>('.orbit-continue')!.hidden = true;
       const name = run.config.environment?.name;
-      const world = name && !run.config.environment?.interpolated ? name[0].toUpperCase() + name.slice(1) : 'this world';
+      const world = name ? name[0].toUpperCase() + name.slice(1) : 'this world';
       const text = `This ${run.mode === 'cannon' ? 'cannonball' : 'rocket'} is ${formatNumber(end.y / 1000)} km above ${world} and still heading away. It won’t land again in this simulation, so we’ve paused here. Replay the journey or explore with Manual zoom.`;
       this.clock.paused = true;
       this.escapeResult.querySelector('p')!.textContent = text; this.escapeResult.hidden = false;
       this.message(`Escape velocity reached! ${text}`); this.update(); return;
     }
-    if (run.outcome === 'orbit' && run.orbit) {
+    if (run.mode === 'rocket' && run.outcome === 'orbit' && run.orbit) {
       const orbit = run.orbit, laps = run.orbitLaps ?? 1;
+      const rocketEnd = run.samples[run.samples.length - 1];
       const text = `Engine off, still going! Paused after ${laps === 1 ? 'one circuit' : formatNumber(laps) + ' circuits'} at ${formatNumber(orbit.periapsisAltitude / 1000, 1)}–${formatNumber(orbit.apoapsisAltitude / 1000, 1)} km. Keep flying or take a closer look.`;
       this.clock.paused = true;
       this.escapeResult.querySelector('.escape-eyebrow')!.textContent = 'ROUND THE WORLD, NO ENGINE REQUIRED';
@@ -209,7 +218,7 @@ export class FlightDeck {
       this.escapeResult.querySelector<HTMLButtonElement>('.orbit-continue')!.hidden = false;
       this.escapeResult.querySelector<HTMLButtonElement>('.result-inspect')!.hidden = false;
       details.hidden = false;
-      details.querySelector('p')!.textContent = `Each circuit takes ${formatTime(orbit.period)} of flight time. Auto shows another circuit in about 12 viewing seconds. ${formatNumber(end.mProp, 1)} kg of propellant remains. The orbit can continue in this model without air drag or other bodies.`;
+      details.querySelector('p')!.textContent = `Each circuit takes ${formatTime(orbit.period)} of flight time. Auto shows another circuit in about 12 viewing seconds. ${formatNumber(rocketEnd.mProp, 1)} kg of propellant remains. The orbit can continue in this model without air drag or other bodies.`;
       this.escapeResult.hidden = false; this.message(text); this.update(); return;
     }
     const attempt = orbitAttemptFeedback(run);
