@@ -30,6 +30,7 @@ body.atlas-open { overflow: hidden; }
 .atlas-flight-art { display:block; width:100%; height:auto; }
 .atlas-topics a.atlas-flight-link { padding:9px 8px; margin:9px 0; gap:10px; border:1px solid #d5c6a5; border-radius:12px; background:#faf1dc; box-shadow:0 3px 0 #e4ddc7; font-weight:700; }
 .atlas-topics a.atlas-flight-rockets { background:#e5eeeb; border-color:#bfcec5; box-shadow:0 3px 0 #d5e1d8; }
+.atlas-topics a.atlas-flight-gravity-turn { background:#e6ecee; border-color:#b8c8d1; box-shadow:0 3px 0 #d2dee4; }
 .atlas-topics a.atlas-flight-escape-velocity { background:#e8eff0;border-color:#b8cbd0;box-shadow:0 3px 0 #d4e0df; }
 .atlas-topics a.atlas-flight-lagrange-points { background:#e9eaf1;border-color:#c1c8d7;box-shadow:0 3px 0 #d7dce7; }
 .atlas-topics a.atlas-flight-telescopes { background:#f0ecdf;border-color:#d2c8ae;box-shadow:0 3px 0 #e3dcc8; }

@@ -14,8 +14,8 @@ import { escapeHtml as escape } from '../dom.ts';
 
 let dialog: HTMLDialogElement | undefined;
 export const isWikiOpen = () => !!dialog?.open;
-const symbol = (a: Article) => flightTopicArt(a.id) || (a.id==='escape-velocity'?'↗':a.id==='lagrange-points'?'✣':a.id==='telescopes'?'⌕':a.id === 'asteroid-belt' ? '⠿' : '◎');
-const labTaglines:Record<string,string>={cannons:'Pressure. A push. A boom.',rockets:'Thrust. Flight. Discovery.','escape-velocity':'One push. Will it return?','lagrange-points':'Nudge a probe. Find the balance.',telescopes:'Gather light. Split two stars.'};
+const symbol = (a: Article) => flightTopicArt(a.id) || (a.id==='gravity-turn'?'↷':a.id==='escape-velocity'?'↗':a.id==='lagrange-points'?'✣':a.id==='telescopes'?'⌕':a.id === 'asteroid-belt' ? '⠿' : '◎');
+const labTaglines:Record<string,string>={cannons:'Pressure. A push. A boom.',rockets:'Thrust. Flight. Discovery.','gravity-turn':'Climb. Tip. Fall all the way round.','escape-velocity':'One push. Will it return?','lagrange-points':'Nudge a probe. Find the balance.',telescopes:'Gather light. Split two stars.'};
 
 /** Self-contained reading space. Opening it pauses the lab through a callback;
  * the wiki never changes a world, launcher setting, or recorded experiment. */

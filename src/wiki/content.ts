@@ -22,7 +22,7 @@ export interface Reading {
 export interface Article {
   id: string; title: string; group: string; kind: string; description: string;
   art?: string;
-  lab?:'escape'|'lagrange'|'telescope';
+  lab?:'escape'|'lagrange'|'telescope'|'gravity-turn';
   /** How to say a name that is often guessed wrongly. */
   say?: string;
   stats: [string, string][];
@@ -496,7 +496,7 @@ export const ARTICLES: Article[] = [
           String.raw`The left side is the expansion ratio: exit area divided by throat area. Multiply the calculated ratio by \(A_{\mathrm{throat}}\) to get \(A_{\mathrm{exit}}\). This is the calculation behind Auto for air, within the lab’s allowed area range. It cannot be used with zero ambient pressure; Auto for vacuum instead selects the model’s largest allowed ratio.`,
         ]},
       ]}}},
-    ], related: ['cannons', 'solar-system', 'earth'], sources: [
+    ], related: ['gravity-turn', 'cannons', 'solar-system', 'earth'], sources: [
       ['NASA · A brief history of rockets','https://www.grc.nasa.gov/www/k-12/TRC/Rockets/history_of_rockets.html'],
       ['NASA · Robert Goddard and the 1926 flight','https://science.nasa.gov/earth/earth-observatory/robert-goddard/'],
       ['NASA · Sputnik and the dawn of the space age','https://www.nasa.gov/history/dawn-of-the-space-age/'],

@@ -11,6 +11,7 @@ import { orbitCoordinates, probeDeparture, lagrangeBodyArtwork } from '../src/wi
 import { lagrangeDefaults, resetLagrangePair, type LagrangeSession } from '../src/wiki/lagrange-session.ts';
 import { CLOSEUP_PLOT, closeupPosition, fitCloseupSpan, launchCloseupSpan } from '../src/wiki/lagrange-closeup.ts';
 import { TELESCOPE_DEFAULTS, telescopeExperiment, besselJ1, diffractionIntensity, doubleStarIntensity } from '../src/wiki/telescope-model.ts';
+import { TURN_PRESETS, gravityTurnFlight, turnTelemetry } from '../src/wiki/gravity-turn-model.ts';
 import { getArticle, searchArticles } from '../src/wiki/content.ts';
 
 const near=(actual: number,expected: number,tolerance=1e-10)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} differs from ${expected}`);
@@ -239,9 +240,54 @@ test('diffraction matches J1 references, the Airy zero and symmetric incoherent 
   near(doubleStarIntensity({...TELESCOPE_DEFAULTS,separationArcsec:0},0),2);
 });
 
-test('all three new topics expose an interactive lesson, sources and searchable concepts',()=>{
-  for(const [id,kind] of [['escape-velocity','escape'],['lagrange-points','lagrange'],['telescopes','telescope']] as const){
+test('all four science labs expose an interactive lesson, sources and searchable concepts',()=>{
+  for(const [id,kind] of [['gravity-turn','gravity-turn'],['escape-velocity','escape'],['lagrange-points','lagrange'],['telescopes','telescope']] as const){
     const article=getArticle(id)!;assert.equal(article.lab,kind);assert.equal(article.levels.length,3);assert.ok(article.sources.length>=3);
   }
-  for(const [query,id] of [['escape speed','escape-velocity'],['Coriolis','lagrange-points'],['refractor','telescopes'],['mirror','telescopes'],['Rayleigh','telescopes']])assert.ok(searchArticles(query).some(a=>a.id===id));
+  for(const [query,id] of [['pitch-over','gravity-turn'],['SSTO','gravity-turn'],['apoapsis','gravity-turn'],['escape speed','escape-velocity'],['Coriolis','lagrange-points'],['refractor','telescopes'],['mirror','telescopes'],['Rayleigh','telescopes']])assert.ok(searchArticles(query).some(a=>a.id===id));
+});
+
+test('gravity turn presets contrast elliptical ascent, apoapsis circularisation, vertical climb, short burn and steep pitch-over',()=>{
+  const [elliptical,circularised,transferKick,straightUp,shortBurn,hardTurn]=TURN_PRESETS.map(p=>gravityTurnFlight(p));
+
+  // Single-burn gravity turn creates an off-centre closed ellipse around one focus
+  assert.equal(elliptical.outcome,'orbit');
+  assert.equal(elliptical.circular,false);
+  assert.ok(elliptical.periapsis!==null && elliptical.periapsis>0,'elliptical orbit stays above the surface');
+  assert.ok(elliptical.apoapsis!==null && elliptical.apoapsis>elliptical.periapsis*5,'apoapsis is much higher than periapsis after one low burn');
+  assert.ok(elliptical.eccentricity!==null && elliptical.eccentricity>0.1);
+  assert.ok(elliptical.circulariseBurn!==null && elliptical.circulariseBurn>0);
+
+  // Second burn at apoapsis lifts periapsis to match apoapsis and centres a circular orbit
+  assert.equal(circularised.outcome,'orbit');
+  assert.equal(circularised.circular,true);
+  assert.ok(circularised.kickArc.length>1,'circularised preset fires a finite second burn across apoapsis');
+  assert.ok(circularised.eccentricity!==null && circularised.eccentricity<0.005);
+  assert.ok(circularised.periapsis!==null && circularised.apoapsis!==null);
+  assert.ok(Math.abs(circularised.apoapsis-circularised.periapsis)<0.005,'periapsis rises to match apoapsis');
+
+  // Transfer + kick rescues a suborbital transfer climb into a centred circular orbit
+  const unburnedTransfer=gravityTurnFlight({pitch:TURN_PRESETS[2].pitch,burn:TURN_PRESETS[2].burn,kickBurn:0});
+  assert.equal(unburnedTransfer.outcome,'returning');
+  assert.equal(transferKick.outcome,'orbit');
+  assert.equal(transferKick.circular,true);
+  assert.ok(transferKick.eccentricity!==null && transferKick.eccentricity<0.005);
+
+  // Straight up climbs higher during the burn, has zero sideways motion, and cannot circularise
+  assert.equal(straightUp.outcome,'returning');
+  assert.equal(straightUp.circulariseBurn,null);
+  assert.ok(turnTelemetry(straightUp.cutoff).altitude>turnTelemetry(elliptical.cutoff).altitude,'straight up climbs higher during the burn');
+  near(turnTelemetry(straightUp.cutoff).sidewaysRatio,0,1e-12);
+  assert.equal(gravityTurnFlight({pitch:0,burn:0.56,kickBurn:0.03}).outcome,'returning');
+
+  assert.equal(shortBurn.outcome,'returning');
+  assert.ok(turnTelemetry(shortBurn.cutoff).sidewaysRatio<turnTelemetry(elliptical.cutoff).sidewaysRatio);
+  assert.ok(hardTurn.outcome==='powered-impact'||hardTurn.outcome==='returning');
+
+  // Specific orbital energy v^2 / 2 - 1 / r stays conserved along unpowered two-body coasts
+  const energy=(f:{x:number;y:number;vx:number;vy:number})=>0.5*(f.vx*f.vx+f.vy*f.vy)-1/Math.hypot(f.x,f.y);
+  const e1=energy(elliptical.cutoff);
+  for(const sample of elliptical.coast)near(energy(sample),e1,1e-6);
+  const e2=energy(circularised.kickCutoff!);
+  for(const sample of circularised.coast)near(energy(sample),e2,1e-6);
 });

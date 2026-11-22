@@ -20,6 +20,9 @@ export const FIELD_HELP:Record<string,string>={
   'telescope-separation':'Angular distance between two equally bright stars. One arcsecond is 1/3600 of a degree. Compare this separation with the diffraction patterns and Rayleigh reference.',
   'telescope-wavelength':'Colour of the ideal monochromatic light. Longer wavelengths produce wider diffraction patterns through the same aperture.',
   'telescope-obstruction':'Secondary-mirror diameter divided by primary diameter. A 20% diameter obstruction blocks 4% of the area and changes the diffraction rings. Applies only to the reflector.',
+  'turn-pitch':'Initial tilt away from vertical at pitch-over (t = 0.08). After this small nudge, thrust points strictly along the velocity vector while gravity gradually bends the path towards the horizon. Zero degrees flies straight up.',
+  'turn-burn':'Duration of the first (ascent) engine burn from liftoff to initial cutoff. A single ascent burn from near the surface finishes low, naturally placing the rocket on an off-centre ellipse—or a suborbital transfer arc.',
+  'turn-kick':'Duration of a second prograde engine burn straddling apoapsis (the highest point of the coast). Adding sideways speed at the highest point raises the opposite side of the ellipse, turning an off-centre ellipse or transfer climb into a centred circular orbit.',
 };
 let sequence=0;
 /** One delegated tooltip per mounted tool, kept in the dialog's top layer.

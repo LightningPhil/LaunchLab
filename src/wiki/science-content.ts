@@ -1,8 +1,10 @@
 import type { Article } from './content.ts';
+import { GRAVITY_TURN_ARTICLE } from './gravity-turn-reading.ts';
 
 /** Original, layered lessons. Mathematical and numerical sources are recorded
  * alongside the models in docs/gravity-and-optics.md. */
 export const SCIENCE_ARTICLES:Article[]=[
+  GRAVITY_TURN_ARTICLE,
   {
     id:'escape-velocity',title:'Escape velocity',group:'The science of flight',kind:'Energy / gravity / a journey without returning',lab:'escape',
     description:'How fast is fast enough? Change the world, launch height and speed, then follow the energy.',
@@ -26,7 +28,7 @@ export const SCIENCE_ARTICLES:Article[]=[
         ]},
         'Air resistance, surface rotation, other worlds and further engine burns are omitted. Real rockets can leave gradually under continued thrust, so escape speed is not a rule that a rocket must exceed immediately at the launch pad. For gas giants and the Sun, the reference level is the same fictional platform used elsewhere in Launch Lab.',
       ],takeaway:'The energy threshold is independent of probe mass; the energy required is proportional to it.'},
-    ],related:['rockets','earth','moon','lagrange-points'],sources:[
+    ],related:['gravity-turn','rockets','earth','moon','lagrange-points'],sources:[
       ['OpenStax · Gravitational potential energy and escape speed','https://openstax.org/books/university-physics-volume-1/pages/13-3-gravitational-potential-energy-and-total-energy'],
       ['NASA · Orbits and Kepler’s laws','https://science.nasa.gov/solar-system/orbits-and-keplers-laws/'],
       ['NASA · Planetary fact sheets','https://nssdc.gsfc.nasa.gov/planetary/factsheet/'],
